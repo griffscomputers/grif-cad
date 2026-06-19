@@ -1,0 +1,20 @@
+# generated artifacts (STL / STEP / G-code)
+out/
+
+# raw scan data (large, binary)
+scans/raw/
+
+# local printer config (LAN address)
+config/printer.env
+
+# claude code local permission state
+.claude/settings.local.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# os
+.DS_Store

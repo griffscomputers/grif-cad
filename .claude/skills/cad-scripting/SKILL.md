@@ -1,0 +1,42 @@
+---
+name: cad-scripting
+description: Author printable parametric CAD for the grif-cad pipeline. Use when generating or editing OpenSCAD (.scad) prototypes or CadQuery (.py) production models, choosing between the two engines, or exporting STL/STEP. Encodes units, printability rules, and headless render/export for the Creality K2 Plus.
+argument-hint: <part-slug> [what to model]
+---
+
+# cad-scripting
+
+Generate dimensionally-correct, printable geometry. Units are **mm**. The K2 Plus build volume is **350 × 350 × 350 mm** — never exceed it.
+
+## Engine choice
+- **OpenSCAD** — simple extrusions/booleans, a few parameters, fast prototypes → `models/openscad/<slug>.scad`.
+- **CadQuery** — tolerances/fits, STEP output, fillets/chamfers/sweeps/lofts, assemblies, data-driven geometry → `models/cadquery/<slug>.py`.
+
+## OpenSCAD (prototype)
+Parameterize at the top of the file; raise `$fn` for round parts (e.g. `$fn = 64`). Render headless:
+```
+openscad -o out/<slug>/proto.stl models/openscad/<slug>.scad
+openscad -o out/<slug>/proto.stl -D 'height=40' -D 'wall=2.4' models/openscad/<slug>.scad
+openscad -o out/<slug>/proto.stl -p params.json -P large models/openscad/<slug>.scad   # Customizer set
+```
+Use one mechanism per variable — `-D` may not override a value pinned by a Customizer set (openscad#4419).
+
+## CadQuery (production)
+Pin Python **3.12**; `pip install cadquery`. Export via the unified `.export()` (format inferred from extension) — there is no top-level `exportStl`/`exportStep` anymore.
+```python
+import cadquery as cq
+part = cq.Workplane("XY").box(20, 20, 10)
+part.export("out/<slug>/prod.stl")    # mesh for slicing
+part.export("out/<slug>/prod.step")   # B-rep for archive/CAM
+```
+
+## Printability rules (FDM, 0.4 mm nozzle)
+- Min wall ≥ 2 perimeters ≈ **0.8 mm**; prefer ≥ 1.2 mm for structure.
+- Overhangs past ~45° need support — design to avoid them; orient to minimize.
+- Fit clearance: **0.2 mm** loose / **0.1 mm** snug per mating face — tune with a printed tolerance test and log results to `tasks/lessons.md`.
+- Avoid knife-edges on the bed; add a chamfer/base for adhesion.
+- Vertical holes print undersized — oversize ~0.2–0.4 mm or model + ream.
+- Encode print orientation in the model's intent (layer lines ⟂ to load).
+
+## Hand-off
+Export STL → `/slice`. For scanned references, run `/scan-cleanup` first, then reverse-engineer dimensions into a CadQuery model — don't slice raw scan meshes unless you deliberately want an as-scanned reprint.
