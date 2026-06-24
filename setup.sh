@@ -38,7 +38,8 @@ brew_formula() { brew list --formula "$1" >/dev/null 2>&1 && ok "$1 (already)" |
 say "Claude Code, CAD apps, Docker runtime, uv"
 brew_cask claude-code
 brew_cask openscad@snapshot     # Apple-Silicon-native build (the plain 'openscad' cask is an old Intel one)
-brew_cask orcaslicer
+brew_cask orcaslicer           # drives headless slicing + the "Open in OrcaSlicer" button
+brew_cask creality-print       # the "Open in Creality Print" button (GUI; pick your default via SLICER_DEFAULT)
 brew_formula colima
 brew_formula docker
 brew_formula docker-compose

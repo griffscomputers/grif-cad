@@ -21,10 +21,11 @@ cd grif-cad
 ```bash
 bash setup.sh
 ```
-This installs (idempotently — safe to re-run): **Claude Code**, **OpenSCAD**, **OrcaSlicer**,
-the open-source Docker runtime (**Colima** + docker + compose), **uv**, a **Python 3.12 venv**
-with the CAD + bridge dependencies (`requirements.txt`), and your local config files. If
-Homebrew isn't installed, it installs that first (it'll ask for your Mac password).
+This installs (idempotently — safe to re-run): **Claude Code**, **OpenSCAD**, **OrcaSlicer** +
+**Creality Print** (slice in whichever you prefer), the open-source Docker runtime (**Colima** +
+docker + compose), **uv**, a **Python 3.12 venv** with the CAD + bridge dependencies
+(`requirements.txt`), and your local config files. If Homebrew isn't installed, it installs that
+first (it'll ask for your Mac password).
 
 ## 3. Sign in to Claude (one time)
 ```bash
@@ -54,6 +55,9 @@ Then open **http://localhost:3000**, pick the **grif-cad** model, and chat:
 
 A picture of the model appears right in the chat. Click the **microphone** to talk instead of type.
 Leave the `start.sh` window open while you use it; **Ctrl+C** stops the assistant.
+
+### Pick your slicer (optional)
+Each model in the chat shows **🛠 Open in OrcaSlicer** and **🛠 Open in Creality Print** — click whichever you like. To list your favourite first, set `SLICER_DEFAULT=orca` (or `creality`) in `config/bridge.env`. (Automated slicing always uses OrcaSlicer under the hood.)
 
 ### Turn on the microphone
 The mic works on `localhost` out of the box. If it doesn't transcribe, open
