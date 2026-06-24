@@ -36,9 +36,13 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ## Endpoints
 - `GET /v1/models` — advertises the `grif-cad` model
-- `POST /v1/chat/completions` — streaming (SSE) and non-streaming; runs a build, returns text + preview images
-- `GET /files/<name>` — serves `out/preview/*.png`
+- `POST /v1/chat/completions` — streaming (SSE) and non-streaming; runs a build, returns text + preview images + spin/slice links
+- `GET /files/<name>` — serves `out/preview/*` (PNG previews and the exported `.stl`)
+- `GET /view/<model>` — interactive three.js viewer (drag to orbit, scroll to zoom); exports the STL on demand. *(loads three.js from a CDN — needs internet)*
+- `GET /slicer/open?model=<model>` — launches OrcaSlicer on the host with the model, for further edits/slicing
 - `GET /healthz`
+
+Each reply that shows a model appends **🔄 Spin it around** (→ `/view`) and **🛠 Open in OrcaSlicer** (→ `/slicer/open`). `render.sh` exports an `.stl` next to the PNGs so both are ready.
 
 ## Config (`config/bridge.env`)
 `CLAUDE_CODE_OAUTH_TOKEN` (subscription), `GRIFCAD_MODEL` (default `sonnet`), `PORT` (8765),

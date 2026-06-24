@@ -46,4 +46,9 @@ view iso   "55,0,25"
 view front "90,0,0"
 view side  "90,0,90"
 view top   "0,0,0"
+
+# also export an STL (for the interactive 3D viewer + "open in slicer") from OpenSCAD sources
+if [[ "$model" == *.scad || "$model" == *.SCAD ]]; then
+  "$OSCAD" -o "$outdir/${base}.stl" "$model" 2>/dev/null && echo "  $outdir/${base}.stl"
+fi
 echo "done."
