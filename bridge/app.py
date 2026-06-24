@@ -39,6 +39,17 @@ PUBLIC_BASE = os.environ.get("PUBLIC_BASE", f"http://localhost:{PORT}").rstrip("
 MODEL = os.environ.get("GRIFCAD_MODEL", "sonnet")
 MODEL_ID = "grif-cad"
 
+# Slicers offered as a per-person preference. Both buttons always show; the
+# SLICER_DEFAULT one is listed first. Headless /slice stays OrcaSlicer (the only
+# reliably scriptable slicer on macOS) — this preference governs the GUI launch.
+SLICERS = {
+    "orca":     {"label": "OrcaSlicer",     "app": "OrcaSlicer"},
+    "creality": {"label": "Creality Print", "app": "Creality Print"},
+}
+SLICER_DEFAULT = os.environ.get("SLICER_DEFAULT", "orca").lower()
+if SLICER_DEFAULT not in SLICERS:
+    SLICER_DEFAULT = "orca"
+
 VENV_PY = PROJECT_DIR / ".venv" / "bin" / "python"
 OPENSCAD_APP = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 
@@ -176,12 +187,23 @@ def ensure_stl(name: str) -> Optional[Path]:
     return None
 
 
+def slicer_order() -> list[str]:
+    return [SLICER_DEFAULT] + [k for k in SLICERS if k != SLICER_DEFAULT]
+
+
+def app_installed(appname: str) -> bool:
+    return any((Path(base) / f"{appname}.app").exists()
+               for base in ("/Applications", str(Path.home() / "Applications")))
+
+
 def action_links(png_names) -> str:
-    rows = [
-        f"**[🔄 Spin it around]({PUBLIC_BASE}/view/{b})**  ·  "
-        f"**[🛠 Open in OrcaSlicer]({PUBLIC_BASE}/slicer/open?model={b})**"
-        for b in model_bases(png_names)
-    ]
+    rows = []
+    for b in model_bases(png_names):
+        parts = [f"**[🔄 Spin it around]({PUBLIC_BASE}/view/{b})**"]
+        for key in slicer_order():
+            label = SLICERS[key]["label"]
+            parts.append(f"**[🛠 Open in {label}]({PUBLIC_BASE}/slicer/open?model={b}&app={key})**")
+        rows.append("  ·  ".join(parts))
     return ("\n" + "  \n".join(rows) + "\n") if rows else ""
 
 
@@ -383,9 +405,17 @@ async def view(name: str):
 
 
 @app.get("/slicer/open")
-async def slicer_open(model: str = ""):
-    """Launch OrcaSlicer on the host with the model, for further edits/slicing."""
+async def slicer_open(model: str = "", app: str = ""):
+    """Launch the chosen slicer's GUI on the host with the model, for further edits."""
     n = safe_name(model)
+    key = (app or SLICER_DEFAULT).lower()
+    if key not in SLICERS:
+        key = SLICER_DEFAULT
+    appname = SLICERS[key]["app"]
+    if not app_installed(appname):
+        return HTMLResponse(
+            f"<p style='font-family:system-ui'>{appname} isn't installed. Install it, or use the other slicer button.</p>",
+            status_code=404)
     target = next((PREVIEW_DIR / f"{n}{ext}" for ext in (".3mf", ".stl")
                    if (PREVIEW_DIR / f"{n}{ext}").exists()), None)
     if target is None:
@@ -394,9 +424,9 @@ async def slicer_open(model: str = ""):
         return HTMLResponse(
             f"<p style='font-family:system-ui'>No model file for '{n}'. Render it first.</p>", status_code=404)
     try:
-        subprocess.Popen(["open", "-a", "OrcaSlicer", str(target)])
+        subprocess.Popen(["open", "-a", appname, str(target)])
     except Exception as e:
         return HTMLResponse(
-            f"<p style='font-family:system-ui'>Couldn't launch OrcaSlicer: {e}</p>", status_code=500)
+            f"<p style='font-family:system-ui'>Couldn't launch {appname}: {e}</p>", status_code=500)
     return HTMLResponse(
-        f"<p style='font-family:system-ui'>Launching OrcaSlicer with <b>{target.name}</b>… you can close this tab.</p>")
+        f"<p style='font-family:system-ui'>Launching {appname} with <b>{target.name}</b>… you can close this tab.</p>")

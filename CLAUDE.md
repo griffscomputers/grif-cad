@@ -53,7 +53,7 @@ A browser chat (microphone + inline renders) for non-CLI use — see `bridge/REA
 - **Open WebUI** runs in Docker (Colima — open-source engine; `colima start`) at `http://localhost:3000`, pre-wired to the bridge.
 - **`bridge/`** (host, FastAPI :8765) exposes an OpenAI-compatible API and runs this harness via **headless `claude -p`** — reusing these same skills, `render.sh`, and the print gate, not a reimplementation. Auth is the **Claude subscription** (`CLAUDE_CODE_OAUTH_TOKEN`), not an API key. Default model **sonnet**.
 - Rendered PNGs are served at `:8765/files/*` and attached to replies as inline images (image URLs use `localhost`; the OpenWebUI→bridge API connection uses `host.docker.internal`).
-- Each reply also offers **🔄 Spin it around** (three.js STL viewer at `:8765/view/<model>`) and **🛠 Open in OrcaSlicer** (`:8765/slicer/open` launches the slicer on the host). `render.sh` exports an `.stl` beside the PNGs.
+- Each reply also offers **🔄 Spin it around** (three.js STL viewer at `:8765/view/<model>`) and a per-person **Open in <slicer>** launcher — both OrcaSlicer and Creality Print buttons show; `SLICER_DEFAULT` lists the preferred one first. Headless `/slice` always uses OrcaSlicer (the only reliably scriptable slicer on macOS); Creality Print is open-in-GUI only and its profiles are a separate world (not interchangeable with Orca). `render.sh` exports an `.stl` beside the PNGs.
 - **Safety holds through the UI:** the bridge's `--allowedTools` allowlist covers render/slice but **not** the printer; `print.sh`/Moonraker stays human-only. Never `--dangerously-skip-permissions`.
 
 ## Layout
