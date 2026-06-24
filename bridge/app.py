@@ -44,7 +44,9 @@ PERSONA = (
     "a kid and their parent. Use simple, encouraging language and explain what you are "
     "building. When fit matters, ask for real caliper measurements instead of guessing. "
     "Whenever you create or change a model, render it with `scripts/render.sh <file>` so "
-    "a picture shows up, then describe what you made in a sentence or two. Never start a "
+    "a picture shows up, then describe what you made in a sentence or two. To show an "
+    "existing render, read its PNG in out/preview/ (or re-run render.sh) — that makes the "
+    "picture appear for the user. Never start a "
     "physical print — sending a job to the printer is always a grown-up's explicit decision."
 )
 
@@ -150,10 +152,13 @@ async def run_claude(prompt: str, key: str):
         *build_cmd(prompt, SESSIONS.get(key)),
         cwd=str(PROJECT_DIR), env=env,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        limit=16 * 1024 * 1024,   # stream-json is one JSON object per line; a line carrying a
+                                  # read image easily exceeds asyncio's 64 KiB readline default
     )
 
     final_session = SESSIONS.get(key)
     produced = False
+    read_pngs: set[str] = set()
     assert proc.stdout is not None
     async for raw in proc.stdout:
         line = raw.decode(errors="replace").strip()
@@ -172,7 +177,12 @@ async def run_claude(prompt: str, key: str):
                     produced = True
                     yield ("text", block["text"])
                 elif block.get("type") == "tool_use":
-                    yield ("status", f"\n_🛠 {block.get('name', 'tool')}…_\n")
+                    name = block.get("name", "tool")
+                    yield ("status", f"\n_🛠 {name}…_\n")
+                    if name == "Read":
+                        fp = (block.get("input") or {}).get("file_path", "")
+                        if fp.endswith(".png") and (PREVIEW_DIR / Path(fp).name).exists():
+                            read_pngs.add(Path(fp).name)   # surface previews the agent looked at
         elif kind == "result" and ev.get("session_id"):
             final_session = ev["session_id"]
 
@@ -187,7 +197,8 @@ async def run_claude(prompt: str, key: str):
         msg = err.decode(errors="replace").strip()[:500] or f"exit {proc.returncode}"
         yield ("text", f"\n⚠️ build error: {msg}\n")
 
-    imgs = image_markdown(changed_previews(before))
+    surfaced = sorted(set(changed_previews(before)) | read_pngs)
+    imgs = image_markdown(surfaced)
     if imgs:
         yield ("text", imgs)
     yield ("done", "")
@@ -227,12 +238,16 @@ async def chat_completions(req: Request):
     if body.get("stream"):
         async def gen():
             yield chunk({"role": "assistant"})
-            async for kind, text in run_claude(prompt, key):
-                if kind in ("text", "status") and text:
-                    yield chunk({"content": text})
-                elif kind == "done":
-                    yield chunk({}, finish="stop")
-                    yield "data: [DONE]\n\n"
+            try:
+                async for kind, text in run_claude(prompt, key):
+                    if kind in ("text", "status") and text:
+                        yield chunk({"content": text})
+                    elif kind == "done":
+                        yield chunk({}, finish="stop")
+            except Exception as e:  # never truncate the HTTP stream — close it cleanly
+                yield chunk({"content": f"\n⚠️ bridge error: {e}\n"})
+                yield chunk({}, finish="stop")
+            yield "data: [DONE]\n\n"
         return StreamingResponse(gen(), media_type="text/event-stream")
 
     parts = []
