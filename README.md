@@ -23,6 +23,15 @@ Full walkthrough + troubleshooting: **[INSTALL.md](INSTALL.md)**.
   `/scan-cleanup`, `/slice`, `/print`. See `CLAUDE.md` for the pipeline, engine-selection rule, and safety rules.
 
 ## Manual setup
-Prefer to wire it up yourself? Install OpenSCAD + OrcaSlicer, create a Python 3.12 venv and
-`uv pip install -r requirements.txt`, `cp config/printer.env.example config/printer.env` (set
-`K2_PLUS_HOST`), and export the K2 Plus presets from OrcaSlicer into `profiles/`.
+Prefer to wire it up by hand (macOS)? `setup.sh` runs all of this for you, but the pieces are:
+```bash
+# apps + tools (both slicers)
+brew install --cask claude-code openscad@snapshot orcaslicer creality-print
+brew install colima docker docker-compose uv
+# python stack
+uv venv --python 3.12 .venv && uv pip install -r requirements.txt
+# local config
+cp config/printer.env.example config/printer.env   # set K2_PLUS_HOST
+cp config/bridge.env.example  config/bridge.env     # set CLAUDE_CODE_OAUTH_TOKEN, SLICER_DEFAULT
+```
+Then export the K2 Plus presets from OrcaSlicer into `profiles/`.

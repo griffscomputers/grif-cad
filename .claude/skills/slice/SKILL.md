@@ -25,6 +25,7 @@ On a Mac call the bundle binary directly — there is **no xvfb on macOS** (that
 ## Creality Print (GUI only)
 Creality Print is an OrcaSlicer fork but has no reliable headless CLI on macOS and an **incompatible profile format** (no sharing with Orca), so it's open-in-GUI only:
 ```
+brew install --cask creality-print          # setup.sh installs this for you
 open -a "Creality Print" out/<slug>/prod.stl
 ```
 In the web UI this is the **🛠 Open in Creality Print** button (per-person preference via `SLICER_DEFAULT`). Creality Print has first-class K2 Plus + CFS support for manual multicolor work.

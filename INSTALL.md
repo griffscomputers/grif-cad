@@ -59,6 +59,11 @@ Leave the `start.sh` window open while you use it; **Ctrl+C** stops the assistan
 ### Pick your slicer (optional)
 Each model in the chat shows **🛠 Open in OrcaSlicer** and **🛠 Open in Creality Print** — click whichever you like. To list your favourite first, set `SLICER_DEFAULT=orca` (or `creality`) in `config/bridge.env`. (Automated slicing always uses OrcaSlicer under the hood.)
 
+`setup.sh` installs both slicers. To (re)install one by hand:
+```bash
+brew install --cask orcaslicer creality-print
+```
+
 ### Turn on the microphone
 The mic works on `localhost` out of the box. If it doesn't transcribe, open
 **Admin → Settings → Audio → Speech-to-Text** and choose an engine (**Local Whisper** = offline;
