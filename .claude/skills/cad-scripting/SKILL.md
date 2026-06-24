@@ -8,6 +8,8 @@ argument-hint: <part-slug> [what to model]
 
 Generate dimensionally-correct, printable geometry. Units are **mm**. The K2 Plus build volume is **350 × 350 × 350 mm** — never exceed it.
 
+**Source real dimensions — never hallucinate fit-critical numbers.** Look them up (dimensions.com is good for consumer hardware) or have the user caliper them. Put every uncertain dimension in a named `*_fit` parameter with a `// PROXY - verify` comment so what still needs grounding is obvious. The model can be geometrically perfect and still not fit if the numbers are guesses.
+
 ## Engine choice
 - **OpenSCAD** — simple extrusions/booleans, a few parameters, fast prototypes → `models/openscad/<slug>.scad`.
 - **CadQuery** — tolerances/fits, STEP output, fillets/chamfers/sweeps/lofts, assemblies, data-driven geometry → `models/cadquery/<slug>.py`.
@@ -37,6 +39,9 @@ part.export("out/<slug>/prod.step")   # B-rep for archive/CAM
 - Avoid knife-edges on the bed; add a chamfer/base for adhesion.
 - Vertical holes print undersized — oversize ~0.2–0.4 mm or model + ream.
 - Encode print orientation in the model's intent (layer lines ⟂ to load).
+
+## Preview — the visual self-correction loop
+`scripts/render.sh <file.scad|.stl> [outdir]` renders iso/front/side/top PNGs headlessly (it locates the OpenSCAD app on macOS; default outdir `out/preview`). The loop: **edit params → render → read the PNGs → fix what's wrong → re-render** (sub-second). Inspect your own geometry — wrong proportions, overhangs, parts clipping the build plate or each other — *before* exporting STL. Keep the OpenSCAD GUI open too; it live-reloads the file on each edit for interactive orbit.
 
 ## Hand-off
 Export STL → `/slice`. For scanned references, run `/scan-cleanup` first, then reverse-engineer dimensions into a CadQuery model — don't slice raw scan meshes unless you deliberately want an as-scanned reprint.
