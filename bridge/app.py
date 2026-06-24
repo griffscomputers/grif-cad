@@ -36,7 +36,9 @@ PREVIEW_DIR = PROJECT_DIR / "out" / "preview"
 SCAD_DIR = PROJECT_DIR / "models" / "openscad"
 PORT = int(os.environ.get("PORT", "8765"))
 PUBLIC_BASE = os.environ.get("PUBLIC_BASE", f"http://localhost:{PORT}").rstrip("/")
-MODEL = os.environ.get("GRIFCAD_MODEL", "sonnet")
+MODEL = os.environ.get("GRIFCAD_MODEL", "sonnet")          # base model (normal requests)
+MODEL_MAX = os.environ.get("GRIFCAD_MODEL_MAX", "opus")    # escalation model (hard requests)
+AUTOROUTE = os.environ.get("GRIFCAD_AUTOROUTE", "1").lower() not in ("0", "false", "no", "off")
 MODEL_ID = "grif-cad"
 
 # Slicers offered as a per-person preference. Both buttons always show; the
@@ -251,12 +253,35 @@ addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updat
 """
 
 
-def build_cmd(prompt: str, session_id: Optional[str]) -> list[str]:
+# Requests matching these signals escalate from the base model to MODEL_MAX (opus).
+HARD_SIGNALS = re.compile(
+    r"\b(assembl(?:y|e|ies|ed)|mating|mate|snap[- ]?fit|press[- ]?fit|interlock|"
+    r"mechanism|gear|gears|thread(?:ed|s)?|bearing|hinge|linkage|joint|"
+    r"toleranc(?:e|es)|clearance|precise|precision|exact fit|"
+    r"lattice|honeycomb|gyroid|loft(?:ed)?|sweep|spline|organic|ergonomic|"
+    r"cadquery|step file|\.step|multi[- ]?part|multiple parts|"
+    r"complex|complicated|intricate|advanced)\b",
+    re.IGNORECASE,
+)
+
+
+def choose_model(prompt: str) -> str:
+    low = (prompt or "").lower()
+    if re.search(r"\b(?:use|in|with) opus\b", low):        # explicit override wins
+        return MODEL_MAX
+    if re.search(r"\b(?:use|in|with) sonnet\b", low):
+        return MODEL
+    if AUTOROUTE and HARD_SIGNALS.search(prompt or ""):
+        return MODEL_MAX
+    return MODEL
+
+
+def build_cmd(prompt: str, session_id: Optional[str], model: str) -> list[str]:
     cmd = [
         "claude", "-p", prompt,
         "--output-format", "stream-json",
         "--verbose",
-        "--model", MODEL,
+        "--model", model,
         "--append-system-prompt", PERSONA,
         "--permission-mode", "acceptEdits",
         "--allowedTools", allowed_tools(),
@@ -272,8 +297,10 @@ async def run_claude(prompt: str, key: str):
     env = dict(os.environ)
     env.pop("ANTHROPIC_API_KEY", None)  # force the subscription path
 
+    model = choose_model(prompt)
+    print(f"[grif-cad] model={model}", flush=True)
     proc = await asyncio.create_subprocess_exec(
-        *build_cmd(prompt, SESSIONS.get(key)),
+        *build_cmd(prompt, SESSIONS.get(key), model),
         cwd=str(PROJECT_DIR), env=env,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         limit=16 * 1024 * 1024,   # stream-json is one JSON object per line; a line carrying a
@@ -390,7 +417,8 @@ async def chat_completions(req: Request):
 
 @app.get("/healthz")
 async def healthz():
-    return {"ok": True, "project": str(PROJECT_DIR), "model": MODEL}
+    return {"ok": True, "project": str(PROJECT_DIR),
+            "model": MODEL, "escalate_to": MODEL_MAX, "autoroute": AUTOROUTE}
 
 
 @app.get("/view/{name}")
