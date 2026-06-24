@@ -48,13 +48,22 @@ Decomposition heuristic: knowledge → **Skill**, context → **subagent**, capa
 - **No subagents yet** — add a scan-processing subagent when point-cloud iteration starts polluting main context.
 - **Interactive CLI, not the Agent SDK** — graduate to the SDK only for unattended/embedded runs.
 
+## Web / voice front end (Open WebUI → headless Claude Code)
+A browser chat (microphone + inline renders) for non-CLI use — see `bridge/README.md` and `deploy/docker-compose.yml`.
+- **Open WebUI** runs in Docker (Colima — open-source engine; `colima start`) at `http://localhost:3000`, pre-wired to the bridge.
+- **`bridge/`** (host, FastAPI :8765) exposes an OpenAI-compatible API and runs this harness via **headless `claude -p`** — reusing these same skills, `render.sh`, and the print gate, not a reimplementation. Auth is the **Claude subscription** (`CLAUDE_CODE_OAUTH_TOKEN`), not an API key. Default model **sonnet**.
+- Rendered PNGs are served at `:8765/files/*` and attached to replies as inline images (image URLs use `localhost`; the OpenWebUI→bridge API connection uses `host.docker.internal`).
+- **Safety holds through the UI:** the bridge's `--allowedTools` allowlist covers render/slice but **not** the printer; `print.sh`/Moonraker stays human-only. Never `--dangerously-skip-permissions`.
+
 ## Layout
 - `models/openscad/` — `.scad` sources · `models/cadquery/` — `.py` sources
 - `profiles/` — OrcaSlicer machine/process/filament JSON for the K2 Plus
 - `scans/raw/` (gitignored) raw scanner output · `scans/clean/` cleaned meshes
 - `out/` (gitignored) — generated STL/STEP/G-code
-- `scripts/` — pipeline helpers: `clean_scan.py`, `slice.sh`, `print.sh`
-- `config/printer.env` (gitignored; copy from `.example`) — `K2_PLUS_HOST`
+- `scripts/` — pipeline helpers: `render.sh` (preview PNGs), `clean_scan.py`, `slice.sh`, `print.sh`
+- `bridge/` — OpenAI-compatible front end over headless Claude Code (`app.py`, `run.sh`)
+- `deploy/docker-compose.yml` — Open WebUI container
+- `config/printer.env` · `config/bridge.env` (both gitignored; copy from `.example`) — `K2_PLUS_HOST` · `CLAUDE_CODE_OAUTH_TOKEN`
 - `tasks/lessons.md` — corrections + measured-vs-modeled deltas (review at session start)
 
 ## Open items to verify on real hardware

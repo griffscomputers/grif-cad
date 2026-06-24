@@ -1,0 +1,7 @@
+# grif-cad Python dependencies — Python 3.12 venv (created by setup.sh via uv).
+# One shared venv serves both the CAD stack and the web bridge. Pinned to the
+# versions validated on macOS Apple Silicon.
+cadquery==2.8.0             # production CAD: parametric models, STL + STEP export
+pymeshlab==2025.7.post1     # 3D-scan mesh cleanup (Poisson reconstruction, decimation)
+fastapi==0.138.0           # web bridge framework (OpenAI-compatible endpoint)
+uvicorn[standard]==0.49.0  # ASGI server for the bridge

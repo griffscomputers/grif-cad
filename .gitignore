@@ -4,8 +4,9 @@ out/
 # raw scan data (large, binary)
 scans/raw/
 
-# local printer config (LAN address)
-config/printer.env
+# local config (printer LAN address, bridge subscription token) — keep *.example only
+config/*.env
+!config/*.env.example
 
 # claude code local permission state
 .claude/settings.local.json
