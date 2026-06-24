@@ -74,7 +74,7 @@ ok "venv ready ($(.venv/bin/python --version))"
 
 # --- local config from examples ---
 say "Local config"
-for name in printer bridge; do
+for name in printer bridge repos; do
   ex="config/${name}.env.example"; cf="config/${name}.env"
   if [ -f "$ex" ] && [ ! -f "$cf" ]; then cp "$ex" "$cf"; ok "created $cf (edit it)"; else ok "$cf"; fi
 done
@@ -97,6 +97,9 @@ cat <<'NEXT'
 
   2) (optional) If you have the Creality K2 Plus, set its address:
        open config/printer.env   →   K2_PLUS_HOST=<printer-ip>
+
+  3) (optional) Search Thingiverse for existing models — add a free token:
+       https://www.thingiverse.com/developers/apps  →  config/repos.env (THINGIVERSE_TOKEN=)
 
   Then start everything:
        bash scripts/start.sh

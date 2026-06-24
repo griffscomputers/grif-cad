@@ -81,6 +81,9 @@ def allowed_tools() -> str:
         # slice — safe (produces G-code, no physical action)
         "Bash(bash scripts/slice.sh:*)",
         "Bash(scripts/slice.sh:*)",
+        # find existing models (Thingiverse search/download + browser links)
+        "Bash(python3 scripts/find_model.py:*)",
+        "Bash(scripts/find_model.py:*)",
         # cad tooling
         "Bash(openscad:*)",
         f"Bash({OPENSCAD_APP}:*)",

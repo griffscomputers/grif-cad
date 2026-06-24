@@ -47,8 +47,11 @@ view front "90,0,0"
 view side  "90,0,90"
 view top   "0,0,0"
 
-# also export an STL (for the interactive 3D viewer + "open in slicer") from OpenSCAD sources
+# make an STL available beside the PNGs (for the 3D viewer + "open in slicer"):
+# export it from an OpenSCAD source, or pass a downloaded/imported .stl straight through.
 if [[ "$model" == *.scad || "$model" == *.SCAD ]]; then
   "$OSCAD" -o "$outdir/${base}.stl" "$model" 2>/dev/null && echo "  $outdir/${base}.stl"
+elif [[ "$model" == *.stl || "$model" == *.STL ]]; then
+  cp -f "$model" "$outdir/${base}.stl" && echo "  $outdir/${base}.stl"
 fi
 echo "done."

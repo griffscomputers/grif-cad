@@ -46,6 +46,14 @@ K2_PLUS_HOST=192.168.1.50      # your printer's IP
 ```
 Everything up to slicing works without a printer.
 
+### (Optional) Let it find existing models
+"Search before you build" pulls from Thingiverse. Add a free token — register an app at
+https://www.thingiverse.com/developers/apps and paste it into `config/repos.env`:
+```
+THINGIVERSE_TOKEN=<paste it here>
+```
+Without it, search still gives browser links (Thingiverse, Creality Cloud, MakerWorld, Printables, Cults3D).
+
 ## 5. Start it
 ```bash
 bash scripts/start.sh

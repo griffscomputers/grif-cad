@@ -24,6 +24,8 @@ Units are **millimeters, always.** Each part gets a `<slug>`; all artifacts for 
 | 5 · Print | **Moonraker API** | physical part | **requires explicit human confirmation** |
 | 6 · Verify | calipers + `tasks/lessons.md` | measured deltas → model fixes | close the ralph loop |
 
+**Reuse before building:** before stage 1, consider `/find-model` to pull an existing design (license-aware) instead of modeling from scratch.
+
 ### CAD engine selection rule
 - **OpenSCAD** — simple extrusions/booleans with a few parameters → quick prototypes.
 - **CadQuery** — dimensional tolerances/fits, STEP output (archive/CAM), fillets/chamfers/sweeps/lofts, multi-part assemblies, or geometry generated from data.
@@ -36,6 +38,7 @@ Procedure lives in `.claude/skills/` — invoke as slash commands or let them fi
 - **`/scan-cleanup`** — 3D-scan mesh repair via pymeshlab (load → normals → Poisson → decimate → export).
 - **`/slice`** — OrcaSlicer headless CLI with the K2 Plus profile.
 - **`/print`** — Moonraker upload + start to the K2 Plus, with the safety gate.
+- **`/find-model`** — search for an existing printable model before building from scratch: auto-searches Thingiverse (license-aware, downloads to `models/downloads/`), plus browser search links for Creality Cloud / MakerWorld / Printables / Cults3D. Needs a free `THINGIVERSE_TOKEN` (`config/repos.env`); Creality Cloud is also reachable inside Creality Print.
 
 ## Safety — physical machine
 
