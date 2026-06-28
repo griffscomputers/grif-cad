@@ -19,3 +19,6 @@ venv/
 
 # os
 .DS_Store
+
+# runtime state (bridge pid + log)
+.run/

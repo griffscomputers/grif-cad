@@ -16,17 +16,28 @@ Open WebUI ──/v1/chat/completions──▶ bridge ──spawns──▶ clau
 **Claude subscription** (no metered API key). The Agent SDK is API-key-metered and would
 mean re-plumbing tools. A plain LLM proxy (LiteLLM) only relays chat and can't run OpenSCAD.
 
-## Run
+## Run — one command (recommended)
+`scripts/stack.sh` controls the whole stack (Colima → Open WebUI → bridge). The bridge runs
+**detached** — no terminal window or Claude session to keep open.
 ```bash
-# 1. one-time: durable subscription token (skip if you're already logged into `claude`)
+scripts/stack.sh start          # bring everything up (idempotent), prints the URL
+scripts/stack.sh check          # PASS/FAIL test of every layer (exit 1 on failure)
+scripts/stack.sh check --deep   #   …plus a real chat round-trip through the bridge
+scripts/stack.sh restart        # bounce the bridge when something is wedged
+scripts/stack.sh status         # one-line health of each layer
+scripts/stack.sh logs -f        # follow the bridge log
+scripts/stack.sh stop           # stop bridge + web UI (leaves the docker engine up)
+```
+One-time setup (durable subscription token; skip if you're already logged into `claude`):
+```bash
 cp config/bridge.env.example config/bridge.env
-claude setup-token            # paste the token into config/bridge.env (CLAUDE_CODE_OAUTH_TOKEN=)
+claude setup-token              # paste into config/bridge.env (CLAUDE_CODE_OAUTH_TOKEN=)
+```
 
-# 2. start the bridge (host)
-bash bridge/run.sh            # http://localhost:8765  (container reaches it at host.docker.internal:8765)
-
-# 3. start Open WebUI (pre-wired to the bridge)
-docker compose -f deploy/docker-compose.yml up -d
+### Run the pieces by hand
+```bash
+bash bridge/run.sh                                  # bridge in the foreground (:8765)
+docker compose -f deploy/docker-compose.yml up -d   # Open WebUI (:3000)
 ```
 
 ## Use it (browser)
