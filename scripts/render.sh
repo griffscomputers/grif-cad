@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # render.sh — multi-angle PNG previews of a .scad or .stl model (the agent's "eyes").
-# Usage:  scripts/render.sh <model.scad|model.stl> [outdir]   (default outdir: out/preview)
+# Usage:  scripts/render.sh <model.scad|model.stl> [outdir]   (default outdir: the model's folder)
 # Renders iso / front / side / top PNGs headlessly via OpenSCAD so the model can be
 # visually reviewed (by the agent and by you) before slicing.
+#
+# Default outdir is the model's own directory, so a part rendered from
+# projects/<slug>/<slug>.scad lands its PNGs + STL right in projects/<slug>/.
 set -euo pipefail
 
 model="${1:?usage: render.sh <model.scad|.stl> [outdir]}"
-outdir="${2:-out/preview}"
+outdir="${2:-$(dirname "$model")}"
 mkdir -p "$outdir"
 
 # Locate the OpenSCAD CLI — the macOS cask installs a versioned .app (e.g.

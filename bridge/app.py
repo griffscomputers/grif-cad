@@ -32,8 +32,9 @@ from fastapi.staticfiles import StaticFiles
 
 # ---------------------------------------------------------------- config
 PROJECT_DIR = Path(os.environ.get("PROJECT_DIR", Path(__file__).resolve().parent.parent))
-PREVIEW_DIR = PROJECT_DIR / "out" / "preview"
-SCAD_DIR = PROJECT_DIR / "models" / "openscad"
+# Each part lives in its own folder projects/<slug>/ holding all of its files. The bridge
+# serves that tree at /files/<slug>/<file> and surfaces renders from projects/*/*.png.
+PROJECTS_DIR = PROJECT_DIR / "projects"
 PORT = int(os.environ.get("PORT", "8765"))
 PUBLIC_BASE = os.environ.get("PUBLIC_BASE", f"http://localhost:{PORT}").rstrip("/")
 MODEL = os.environ.get("GRIFCAD_MODEL", "sonnet")          # base model (normal requests)
@@ -58,11 +59,13 @@ OPENSCAD_APP = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"
 PERSONA = (
     "You are GrifCAD, a friendly workshop helper that designs 3D-printable parts with "
     "a kid and their parent. Use simple, encouraging language and explain what you are "
-    "building. When fit matters, ask for real caliper measurements instead of guessing. "
-    "Whenever you create or change a model, render it with `scripts/render.sh <file>` so "
-    "a picture shows up, then describe what you made in a sentence or two. To show an "
-    "existing render, read its PNG in out/preview/ (or re-run render.sh) — that makes the "
-    "picture appear for the user. Never start a "
+    "building. Each part gets its OWN folder projects/<slug>/ (pick a short kebab-case "
+    "<slug>): start it with `scripts/project.sh new <slug>`, or write projects/<slug>/<slug>.scad "
+    "directly. Whenever you create or change a model, render it with "
+    "`scripts/render.sh projects/<slug>/<slug>.scad` (or `scripts/project.sh render <slug>`) so a "
+    "picture shows up in its folder, then describe what you made in a sentence or two. To show an "
+    "existing render, read its PNG in projects/<slug>/ — that makes the picture appear for the user. "
+    "When fit matters, ask for real caliper measurements instead of guessing. Never start a "
     "physical print — sending a job to the printer is always a grown-up's explicit decision."
 )
 
@@ -78,6 +81,11 @@ def allowed_tools() -> str:
         "Bash(./scripts/render.sh:*)",
         "Bash(scripts/render.sh:*)",
         f"Bash(bash {p}/scripts/render.sh:*)",
+        # per-part project folders + catalog
+        "Bash(bash scripts/project.sh:*)",
+        "Bash(./scripts/project.sh:*)",
+        "Bash(scripts/project.sh:*)",
+        f"Bash(bash {p}/scripts/project.sh:*)",
         # slice — safe (produces G-code, no physical action)
         "Bash(bash scripts/slice.sh:*)",
         "Bash(scripts/slice.sh:*)",
@@ -100,8 +108,8 @@ def allowed_tools() -> str:
 SESSIONS: dict[str, str] = {}
 
 app = FastAPI(title="grif-cad bridge")
-PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/files", StaticFiles(directory=str(PREVIEW_DIR)), name="files")
+PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/files", StaticFiles(directory=str(PROJECTS_DIR)), name="files")
 
 
 # ---------------------------------------------------------------- helpers
@@ -124,15 +132,20 @@ def conversation_key(messages: list) -> str:
     return "default"
 
 
+def _rel(p: Path) -> str:
+    return str(p.relative_to(PROJECTS_DIR))      # "<slug>/<file>.png"
+
+
 def snapshot_previews() -> dict[str, float]:
-    return {p.name: p.stat().st_mtime for p in PREVIEW_DIR.glob("*.png")}
+    return {_rel(p): p.stat().st_mtime for p in PROJECTS_DIR.glob("*/*.png")}
 
 
 def changed_previews(before: dict[str, float]) -> list[str]:
     out = []
-    for p in sorted(PREVIEW_DIR.glob("*.png")):
-        if before.get(p.name) != p.stat().st_mtime:
-            out.append(p.name)
+    for p in sorted(PROJECTS_DIR.glob("*/*.png")):
+        rel = _rel(p)
+        if before.get(rel) != p.stat().st_mtime:
+            out.append(rel)
     return out
 
 
@@ -140,9 +153,9 @@ def image_markdown(names: list[str]) -> str:
     if not names:
         return ""
     rows = [""]
-    for n in names:
-        v = int(PREVIEW_DIR.joinpath(n).stat().st_mtime)
-        rows.append(f"![{n}]({PUBLIC_BASE}/files/{n}?v={v})")
+    for n in names:                              # n is "<slug>/<file>.png"
+        v = int(PROJECTS_DIR.joinpath(n).stat().st_mtime)
+        rows.append(f"![{Path(n).name}]({PUBLIC_BASE}/files/{n}?v={v})")
     return "\n".join(rows) + "\n"
 
 
@@ -151,13 +164,13 @@ def safe_name(name: str) -> str:
 
 
 def model_bases(png_names) -> list[str]:
-    # "wall_mount-iso.png" -> "wall_mount"
-    bases = set()
+    # "wall_mount/wall_mount-iso.png" -> slug "wall_mount" (the folder is the identity)
+    slugs = set()
     for nm in png_names:
-        m = re.match(r"(.+?)-(iso|front|side|top)\.png$", nm)
+        m = re.match(r"([^/]+)/.+-(iso|front|side|top)\.png$", nm)
         if m:
-            bases.add(m.group(1))
-    return sorted(bases)
+            slugs.add(m.group(1))
+    return sorted(slugs)
 
 
 def find_openscad() -> Optional[str]:
@@ -173,19 +186,28 @@ def find_openscad() -> Optional[str]:
 
 
 def ensure_stl(name: str) -> Optional[Path]:
-    """Path to PREVIEW_DIR/<name>.stl, exporting from the OpenSCAD source if needed."""
+    """Path to projects/<slug>/<slug>.stl, exporting from the source if it isn't there yet."""
     n = safe_name(name)
     if not n:
         return None
-    stl = PREVIEW_DIR / f"{n}.stl"
+    folder = PROJECTS_DIR / n
+    stl = folder / f"{n}.stl"
     if stl.exists():
         return stl
-    src = SCAD_DIR / f"{n}.scad"
+    src_scad = folder / f"{n}.scad"
     osc = find_openscad()
-    if src.exists() and osc:
+    if src_scad.exists() and osc:
         try:
-            subprocess.run([osc, "-o", str(stl), str(src)],
+            subprocess.run([osc, "-o", str(stl), str(src_scad)],
                            check=True, capture_output=True, timeout=120)
+        except Exception:
+            return None
+        return stl if stl.exists() else None
+    src_py = folder / f"{n}.py"          # CadQuery: running it exports the stl beside itself
+    if src_py.exists() and VENV_PY.exists():
+        try:
+            subprocess.run([str(VENV_PY), str(src_py)], cwd=str(PROJECT_DIR),
+                           check=True, capture_output=True, timeout=180)
         except Exception:
             return None
         return stl if stl.exists() else None
@@ -243,7 +265,7 @@ const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,10000);
 const controls=new OrbitControls(camera,canvas); controls.enableDamping=true;
 scene.add(new THREE.HemisphereLight(0xffffff,0x445566,1.1));
 const dir=new THREE.DirectionalLight(0xffffff,1.3); dir.position.set(1,1.4,2); scene.add(dir);
-new STLLoader().load('/files/__NAME__.stl', geo=>{
+new STLLoader().load('/files/__NAME__/__NAME__.stl', geo=>{
   geo.computeVertexNormals(); geo.center();
   const mat=new THREE.MeshStandardMaterial({color:0x4f8cff,metalness:0.1,roughness:0.55});
   const mesh=new THREE.Mesh(geo,mat); mesh.rotation.x=-Math.PI/2; scene.add(mesh);
@@ -335,8 +357,16 @@ async def run_claude(prompt: str, key: str):
                     yield ("status", f"\n_🛠 {name}…_\n")
                     if name == "Read":
                         fp = (block.get("input") or {}).get("file_path", "")
-                        if fp.endswith(".png") and (PREVIEW_DIR / Path(fp).name).exists():
-                            read_pngs.add(Path(fp).name)   # surface previews the agent looked at
+                        if fp.endswith(".png"):
+                            ap = Path(fp)
+                            if not ap.is_absolute():
+                                ap = PROJECT_DIR / ap
+                            try:                       # surface previews the agent looked at
+                                rel = ap.resolve().relative_to(PROJECTS_DIR.resolve())
+                                if (PROJECTS_DIR / rel).exists():
+                                    read_pngs.add(str(rel))
+                            except Exception:
+                                pass
         elif kind == "result" and ev.get("session_id"):
             final_session = ev["session_id"]
 
@@ -447,8 +477,9 @@ async def slicer_open(model: str = "", app: str = ""):
         return HTMLResponse(
             f"<p style='font-family:system-ui'>{appname} isn't installed. Install it, or use the other slicer button.</p>",
             status_code=404)
-    target = next((PREVIEW_DIR / f"{n}{ext}" for ext in (".3mf", ".stl")
-                   if (PREVIEW_DIR / f"{n}{ext}").exists()), None)
+    folder = PROJECTS_DIR / n
+    target = next((folder / f"{n}{ext}" for ext in (".3mf", ".stl")
+                   if (folder / f"{n}{ext}").exists()), None)
     if target is None:
         target = ensure_stl(n)
     if target is None:

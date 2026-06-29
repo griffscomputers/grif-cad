@@ -48,9 +48,9 @@ docker compose -f deploy/docker-compose.yml up -d   # Open WebUI (:3000)
 ## Endpoints
 - `GET /v1/models` — advertises the `grif-cad` model
 - `POST /v1/chat/completions` — streaming (SSE) and non-streaming; runs a build, returns text + preview images + spin/slice links
-- `GET /files/<name>` — serves `out/preview/*` (PNG previews and the exported `.stl`)
-- `GET /view/<model>` — interactive three.js viewer (drag to orbit, scroll to zoom); exports the STL on demand. *(loads three.js from a CDN — needs internet)*
-- `GET /slicer/open?model=<model>&app=<orca|creality>` — launches the chosen slicer on the host with the model (default = `SLICER_DEFAULT`); 404s with a friendly note if that slicer isn't installed
+- `GET /files/<slug>/<name>` — serves `projects/<slug>/*` (PNG previews and the exported `.stl`)
+- `GET /view/<slug>` — interactive three.js viewer (drag to orbit, scroll to zoom); exports the STL on demand. *(loads three.js from a CDN — needs internet)*
+- `GET /slicer/open?model=<slug>&app=<orca|creality>` — launches the chosen slicer on the host with the model (default = `SLICER_DEFAULT`); 404s with a friendly note if that slicer isn't installed
 - `GET /healthz`
 
 Each reply that shows a model appends **🔄 Spin it around** (→ `/view`) and an **Open in &lt;slicer&gt;** launcher for each slicer (OrcaSlicer + Creality Print; `SLICER_DEFAULT` first). `render.sh` exports an `.stl` next to the PNGs so they're ready.
