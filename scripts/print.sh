@@ -13,7 +13,9 @@ confirm="${2:-}"
 source config/printer.env
 host="${K2_PLUS_HOST:?set K2_PLUS_HOST in config/printer.env}"
 base="http://${host}:4408"
-gcode="out/${slug}/${slug}.gcode"
+# Canonical home is projects/<slug>/; fall back to the legacy out/<slug>/ layout.
+dir="projects/${slug}"; [ -d "$dir" ] || dir="out/${slug}"
+gcode="${dir}/${slug}.gcode"
 
 [ -f "$gcode" ] || { echo "no gcode at $gcode — run scripts/slice.sh $slug first" >&2; exit 1; }
 

@@ -6,7 +6,7 @@ argument-hint: <part-slug> [stl-name]
 
 # slice
 
-OrcaSlicer is the CLI-friendly slicer and ships a built-in **K2 Plus** profile. Output → `out/<slug>/<slug>.gcode`.
+OrcaSlicer is the CLI-friendly slicer and ships a built-in **K2 Plus** profile. Output → `projects/<slug>/<slug>.gcode`.
 
 ## Invocation (headless = OrcaSlicer)
 On a Mac call the bundle binary directly — there is **no xvfb on macOS** (that's Linux-only):
@@ -14,19 +14,19 @@ On a Mac call the bundle binary directly — there is **no xvfb on macOS** (that
 /Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer --slice 0 \
   --load-settings "profiles/k2plus_machine.json;profiles/k2plus_process.json" \
   --load-filaments "profiles/k2plus_filament.json" \
-  --outputdir "out/<slug>" \
+  --outputdir "projects/<slug>" \
   --allow-newer-file \
-  out/<slug>/prod.stl
+  projects/<slug>/<slug>.stl
 ```
 - `--slice 0` = all plates. `--load-settings "machine;process"` is semicolon-separated. `--datadir` points at a profile store if not passing `--load-settings`.
-- `scripts/slice.sh <slug> [stl-name]` wraps this: it resolves the binary and adds `xvfb-run` **only** on a headless Linux box.
+- `scripts/slice.sh <slug> [stl-name]` wraps this: it resolves the binary, defaults the STL to `projects/<slug>/<slug>.stl`, falls back to the legacy `out/<slug>/` layout, and adds `xvfb-run` **only** on a headless Linux box.
 - Export the K2 Plus presets once from the OrcaSlicer GUI into `profiles/`.
 
 ## Creality Print (GUI only)
 Creality Print is an OrcaSlicer fork but has no reliable headless CLI on macOS and an **incompatible profile format** (no sharing with Orca), so it's open-in-GUI only:
 ```
 brew install --cask creality-print          # setup.sh installs this for you
-open -a "Creality Print" out/<slug>/prod.stl
+open -a "Creality Print" projects/<slug>/<slug>.stl
 ```
 In the web UI this is the **🛠 Open in Creality Print** button (per-person preference via `SLICER_DEFAULT`). Creality Print has first-class K2 Plus + CFS support for manual multicolor work.
 

@@ -1,6 +1,12 @@
 # generated artifacts (STL / STEP / G-code)
 out/
 
+# per-project folders — everything a part produces stays local; the repo tracks
+# only the catalog (projects/index.tsv) + the README explaining the convention.
+/projects/*
+!/projects/index.tsv
+!/projects/README.md
+
 # raw scan data (large, binary)
 scans/raw/
 

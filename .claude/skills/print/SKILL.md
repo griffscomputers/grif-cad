@@ -17,7 +17,7 @@ Then wait for an explicit "go." Do not emit raw G-code that heats or moves axes 
 ## Upload, then start (two steps)
 ```
 # 1. upload
-curl -s -F "file=@out/<slug>/<slug>.gcode" \
+curl -s -F "file=@projects/<slug>/<slug>.gcode" \
   "http://$K2_PLUS_HOST:4408/server/files/upload"
 
 # 2. start — ONLY after the human confirms

@@ -12,15 +12,15 @@ This is a self-contained subproject in the `~/Documents/Code` workspace and its 
 
 ## The pipeline (prototype → production → print)
 
-Units are **millimeters, always.** Each part gets a `<slug>`; all artifacts for it live under that slug.
+Units are **millimeters, always.** Each part gets a `<slug>` and **its own folder `projects/<slug>/`** holding *every* file it produces (source, renders, STL/STEP, G-code, data). Those folders are **gitignored**; the repo tracks only the catalog `projects/index.tsv`. Create/list/recall parts with `scripts/project.sh` (`new` / `ls` / `show` / `render` / `reindex`). See `projects/README.md`.
 
 | Stage | Tool | Output | When |
 |---|---|---|---|
 | 0 · Spec | — | function, key dims, material, tolerances | always first — pin dimensions before modeling |
-| 1 · Prototype | **OpenSCAD** | `out/<slug>/proto.stl` | default start: fast, parametric, form/fit checks |
-| 2 · Production | **CadQuery** | `out/<slug>/prod.stl` + `prod.step` | tolerances, assemblies, fillets/lofts, STEP archive, data-driven geometry |
+| 1 · Prototype | **OpenSCAD** | `projects/<slug>/<slug>.stl` | default start: fast, parametric, form/fit checks |
+| 2 · Production | **CadQuery** | `projects/<slug>/<slug>.stl` + `.step` | tolerances, assemblies, fillets/lofts, STEP archive, data-driven geometry |
 | 3 · Scan-assist | **pymeshlab** | `scans/clean/<slug>.ply` | reverse-engineer an existing object; feeds stage 1/2 |
-| 4 · Slice | **OrcaSlicer CLI** | `out/<slug>/<slug>.gcode` | K2 Plus profile |
+| 4 · Slice | **OrcaSlicer CLI** | `projects/<slug>/<slug>.gcode` | K2 Plus profile |
 | 5 · Print | **Moonraker API** | physical part | **requires explicit human confirmation** |
 | 6 · Verify | calipers + `tasks/lessons.md` | measured deltas → model fixes | close the ralph loop |
 
@@ -60,11 +60,11 @@ A browser chat (microphone + inline renders) for non-CLI use — see `bridge/REA
 - **Safety holds through the UI:** the bridge's `--allowedTools` allowlist covers render/slice but **not** the printer; `print.sh`/Moonraker stays human-only. Never `--dangerously-skip-permissions`.
 
 ## Layout
-- `models/openscad/` — `.scad` sources · `models/cadquery/` — `.py` sources
+- `projects/<slug>/` (gitignored) — **one folder per part**: source (`.scad`/`.py`), renders, STL/STEP, G-code, data. The repo tracks only `projects/index.tsv` (catalog) + `projects/README.md`; manage with `scripts/project.sh`.
 - `profiles/` — OrcaSlicer machine/process/filament JSON for the K2 Plus
 - `scans/raw/` (gitignored) raw scanner output · `scans/clean/` cleaned meshes
-- `out/` (gitignored) — generated STL/STEP/G-code
-- `scripts/` — pipeline helpers: `render.sh` (preview PNGs), `clean_scan.py`, `slice.sh`, `print.sh`
+- `out/` (gitignored) — scratch/legacy generated artifacts; the **web bridge still renders previews to `out/preview/`** (moving it to write into `projects/<slug>/` is a tracked follow-up — see `tasks/lessons.md`)
+- `scripts/` — pipeline helpers: `project.sh` (per-part folders + catalog), `render.sh` (preview PNGs), `clean_scan.py`, `slice.sh`, `print.sh`, `stack.sh` (web stack control)
 - `bridge/` — OpenAI-compatible front end over headless Claude Code (`app.py`, `run.sh`)
 - `deploy/docker-compose.yml` — Open WebUI container
 - `config/printer.env` · `config/bridge.env` (both gitignored; copy from `.example`) — `K2_PLUS_HOST` · `CLAUDE_CODE_OAUTH_TOKEN`

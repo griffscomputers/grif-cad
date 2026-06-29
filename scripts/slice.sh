@@ -10,8 +10,13 @@
 set -euo pipefail
 
 slug="${1:?usage: slice.sh <slug> [stl-name]}"
-stl="${2:-prod.stl}"
-out="out/${slug}"
+# Canonical home is projects/<slug>/; fall back to the legacy out/<slug>/ layout.
+out="projects/${slug}"; [ -d "$out" ] || out="out/${slug}"
+# Default STL: the per-project <slug>.stl if present, else the legacy prod.stl.
+stl="${2:-}"
+if [ -z "$stl" ]; then
+  if [ -f "${out}/${slug}.stl" ]; then stl="${slug}.stl"; else stl="prod.stl"; fi
+fi
 [ -f "${out}/${stl}" ] || { echo "no STL at ${out}/${stl} — export from /cad-scripting first" >&2; exit 1; }
 
 # Locate the OrcaSlicer CLI — macOS installs an .app and doesn't put it on PATH.

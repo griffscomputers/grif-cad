@@ -10,16 +10,19 @@ Generate dimensionally-correct, printable geometry. Units are **mm**. The K2 Plu
 
 **Source real dimensions — never hallucinate fit-critical numbers.** Look them up (dimensions.com is good for consumer hardware) or have the user caliper them. Put every uncertain dimension in a named `*_fit` parameter with a `// PROXY - verify` comment so what still needs grounding is obvious. The model can be geometrically perfect and still not fit if the numbers are guesses.
 
+## Project home (one folder per part)
+Every part lives in **`projects/<slug>/`** — source, renders, STL/STEP, G-code, data all together. Start a part with `scripts/project.sh new <slug> [--engine openscad|cadquery]` (scaffolds the source + registers it in `projects/index.tsv`); recall one with `scripts/project.sh show <slug>`. The folder is gitignored; only the catalog is tracked.
+
 ## Engine choice
-- **OpenSCAD** — simple extrusions/booleans, a few parameters, fast prototypes → `models/openscad/<slug>.scad`.
-- **CadQuery** — tolerances/fits, STEP output, fillets/chamfers/sweeps/lofts, assemblies, data-driven geometry → `models/cadquery/<slug>.py`.
+- **OpenSCAD** — simple extrusions/booleans, a few parameters, fast prototypes → `projects/<slug>/<slug>.scad`.
+- **CadQuery** — tolerances/fits, STEP output, fillets/chamfers/sweeps/lofts, assemblies, data-driven geometry → `projects/<slug>/<slug>.py`.
 
 ## OpenSCAD (prototype)
 Parameterize at the top of the file; raise `$fn` for round parts (e.g. `$fn = 64`). Render headless:
 ```
-openscad -o out/<slug>/proto.stl models/openscad/<slug>.scad
-openscad -o out/<slug>/proto.stl -D 'height=40' -D 'wall=2.4' models/openscad/<slug>.scad
-openscad -o out/<slug>/proto.stl -p params.json -P large models/openscad/<slug>.scad   # Customizer set
+openscad -o projects/<slug>/<slug>.stl projects/<slug>/<slug>.scad
+openscad -o projects/<slug>/<slug>.stl -D 'height=40' -D 'wall=2.4' projects/<slug>/<slug>.scad
+openscad -o projects/<slug>/<slug>.stl -p params.json -P large projects/<slug>/<slug>.scad   # Customizer set
 ```
 Use one mechanism per variable — `-D` may not override a value pinned by a Customizer set (openscad#4419).
 
@@ -28,8 +31,8 @@ Pin Python **3.12**; `pip install cadquery`. Export via the unified `.export()` 
 ```python
 import cadquery as cq
 part = cq.Workplane("XY").box(20, 20, 10)
-part.export("out/<slug>/prod.stl")    # mesh for slicing
-part.export("out/<slug>/prod.step")   # B-rep for archive/CAM
+part.export("projects/<slug>/<slug>.stl")    # mesh for slicing
+part.export("projects/<slug>/<slug>.step")   # B-rep for archive/CAM
 ```
 
 ## Printability rules (FDM, 0.4 mm nozzle)
@@ -41,7 +44,7 @@ part.export("out/<slug>/prod.step")   # B-rep for archive/CAM
 - Encode print orientation in the model's intent (layer lines ⟂ to load).
 
 ## Preview — the visual self-correction loop
-`scripts/render.sh <file.scad|.stl> [outdir]` renders iso/front/side/top PNGs headlessly (it locates the OpenSCAD app on macOS; default outdir `out/preview`). The loop: **edit params → render → read the PNGs → fix what's wrong → re-render** (sub-second). Inspect your own geometry — wrong proportions, overhangs, parts clipping the build plate or each other — *before* exporting STL. Keep the OpenSCAD GUI open too; it live-reloads the file on each edit for interactive orbit.
+`scripts/render.sh <file.scad|.stl> [outdir]` renders iso/front/side/top PNGs headlessly (it locates the OpenSCAD app on macOS). For CLI work use **`scripts/project.sh render <slug>`**, which renders the source straight into `projects/<slug>/` so the PNGs + STL stay with the part. (`render.sh`'s bare default outdir is still `out/preview`, which the web bridge relies on — pass the project folder explicitly, or just use `project.sh render`.) The loop: **edit params → render → read the PNGs → fix what's wrong → re-render** (sub-second). Inspect your own geometry — wrong proportions, overhangs, parts clipping the build plate or each other — *before* exporting STL. Keep the OpenSCAD GUI open too; it live-reloads the file on each edit for interactive orbit.
 
 ## Hand-off
 Export STL → `/slice`. For scanned references, run `/scan-cleanup` first, then reverse-engineer dimensions into a CadQuery model — don't slice raw scan meshes unless you deliberately want an as-scanned reprint.
