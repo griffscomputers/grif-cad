@@ -11,12 +11,19 @@
 # The "grif-cad" model then appears in the chat model picker.
 services:
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    # Pinned by digest (was :main, v0.9.6 build 02dc3e689ce): webui/custom.css targets this
+    # exact build's DOM/theme variables. Bump deliberately and re-test the skin.
+    image: ghcr.io/open-webui/open-webui@sha256:7f1b0a1a50cfbac23da3b16f96bc968fd757b26dc9e54e93813d61768ea9184e
     container_name: grifcad-openwebui
     ports:
       - "3000:8080"
     volumes:
       - openwebui-data:/app/backend/data
+      # GrifCAD skin. Files under /app/build/static are copied to the serving dir
+      # at container START (open_webui/config.py) — after editing the CSS:
+      #   docker restart grifcad-openwebui   (+ hard-refresh the browser)
+      # Never mount into /app/backend/open_webui/static (the startup copy fights it).
+      - ./webui/custom.css:/app/build/static/custom.css:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -28,6 +35,12 @@ services:
       - OPENAI_API_BASE_URL=http://host.docker.internal:8765/v1
       - OPENAI_API_KEY=grifcad-local       # the bridge ignores the key
       - ENABLE_OLLAMA_API=false            # no local model; brain is Claude via the bridge
+      # Branding. Renders as "GrifCAD (Open WebUI)" — the suffix is baked in upstream.
+      # (Never use CUSTOM_NAME: it phones home to api.openwebui.com.)
+      - WEBUI_NAME=GrifCAD
+      # Mode-matched starters. NOTE: seeds a FRESH data volume only — on an existing
+      # volume set these in Admin → Settings → Interface (webui.db wins).
+      - 'DEFAULT_PROMPT_SUGGESTIONS=[{"title":["Text to 3D","one-shot part"],"content":"Make me a phone stand with a 15 degree tilt"},{"title":["Image to 3D","photo to part"],"content":"Rebuild the object in this photo as a printable part"},{"title":["3D Agent","design together"],"content":"Let''s design a wall hook — ask me what you need to know"},{"title":["Fix the fit","calipers"],"content":"My last part was 0.4mm too tight — adjust it"}]'
     restart: unless-stopped
 
 volumes:

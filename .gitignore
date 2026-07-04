@@ -10,6 +10,10 @@ out/
 # raw scan data (large, binary)
 scans/raw/
 
+# reference images uploaded through the web chat (bridge saves them here;
+# NOT under projects/ so previews/catalog never mistake them for renders)
+uploads/
+
 # local config (printer LAN address, bridge subscription token) — keep *.example only
 config/*.env
 !config/*.env.example

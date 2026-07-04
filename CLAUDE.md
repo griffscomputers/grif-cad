@@ -53,7 +53,9 @@ Decomposition heuristic: knowledge → **Skill**, context → **subagent**, capa
 
 ## Web / voice front end (Open WebUI → headless Claude Code)
 A browser chat (microphone + inline renders) for non-CLI use — see `bridge/README.md` and `deploy/docker-compose.yml`.
-- **Open WebUI** runs in Docker (Colima — open-source engine; `colima start`) at `http://localhost:3000`, pre-wired to the bridge.
+- **Open WebUI** runs in Docker (Colima — open-source engine; `colima start`) at `http://localhost:3000`, pre-wired to the bridge. The image is **digest-pinned** and reskinned Meshy-dark via `deploy/webui/custom.css` (bind-mounted; static files copy at container **start** → CSS edits need `docker restart grifcad-openwebui`). `WEBUI_NAME=GrifCAD`.
+- **Modes (Meshy-style):** the bridge advertises five model ids so the picker doubles as a mode switcher — `grif-cad` (**3D Agent**, default), `grif-cad-text-to-3d` (one-shot), `grif-cad-image-to-3d` (photo/sketch → Claude vision → *parametric CAD* reconstruction; uploads land in `uploads/`, gitignored), plus `grif-cad-texturing` / `grif-cad-image-gen` — **parked** "coming soon" ids that answer instantly without spawning claude (they'd need raster image generation).
+- **`GET :8765/studio`** — GrifCAD Studio, a Meshy-style asset library of every `projects/<slug>/` part (iso thumbnails, viewer + slicer buttons); every chat reply with a model links to it (**📚 All parts**).
 - **`bridge/`** (host, FastAPI :8765) exposes an OpenAI-compatible API and runs this harness via **headless `claude -p`** — reusing these same skills, `render.sh`, and the print gate, not a reimplementation. Auth is the **Claude subscription** (`CLAUDE_CODE_OAUTH_TOKEN`), not an API key. Model routing: **sonnet** by default, auto-escalating to **opus** for hard jobs (assemblies/tolerances/complex geometry; `GRIFCAD_AUTOROUTE`, with `use opus`/`use sonnet` as a per-message override).
 - Rendered PNGs are served at `:8765/files/*` and attached to replies as inline images (image URLs use `localhost`; the OpenWebUI→bridge API connection uses `host.docker.internal`).
 - Each reply also offers **🔄 Spin it around** (three.js STL viewer at `:8765/view/<model>`) and a per-person **Open in <slicer>** launcher — both OrcaSlicer and Creality Print buttons show; `SLICER_DEFAULT` lists the preferred one first. Headless `/slice` always uses OrcaSlicer (the only reliably scriptable slicer on macOS); Creality Print is open-in-GUI only and its profiles are a separate world (not interchangeable with Orca). `render.sh` exports an `.stl` beside the PNGs.
@@ -63,10 +65,11 @@ A browser chat (microphone + inline renders) for non-CLI use — see `bridge/REA
 - `projects/<slug>/` (gitignored) — **one folder per part**: source (`.scad`/`.py`), renders, STL/STEP, G-code, data. The repo tracks only `projects/index.tsv` (catalog) + `projects/README.md`; manage with `scripts/project.sh`.
 - `profiles/` — OrcaSlicer machine/process/filament JSON for the K2 Plus
 - `scans/raw/` (gitignored) raw scanner output · `scans/clean/` cleaned meshes
-- `out/` (gitignored) — scratch/legacy generated artifacts; the **web bridge still renders previews to `out/preview/`** (moving it to write into `projects/<slug>/` is a tracked follow-up — see `tasks/lessons.md`)
+- `out/` (gitignored) — scratch/legacy generated artifacts (the web bridge now renders into `projects/<slug>/` directly)
+- `uploads/` (gitignored) — reference images attached through the web chat (content-hash names; kept out of `projects/` so previews/catalog never mistake them for renders)
 - `scripts/` — pipeline helpers: `project.sh` (per-part folders + catalog), `render.sh` (preview PNGs), `clean_scan.py`, `slice.sh`, `print.sh`, `stack.sh` (web stack control)
 - `bridge/` — OpenAI-compatible front end over headless Claude Code (`app.py`, `run.sh`)
-- `deploy/docker-compose.yml` — Open WebUI container
+- `deploy/docker-compose.yml` — Open WebUI container (digest-pinned) · `deploy/webui/custom.css` — the GrifCAD skin
 - `config/printer.env` · `config/bridge.env` (both gitignored; copy from `.example`) — `K2_PLUS_HOST` · `CLAUDE_CODE_OAUTH_TOKEN`
 - `tasks/lessons.md` — corrections + measured-vs-modeled deltas (review at session start)
 

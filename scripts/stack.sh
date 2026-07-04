@@ -173,6 +173,13 @@ cmd_check(){
 
   if curl -s -m 5 "$MODELS" 2>/dev/null | grep -q '"grif-cad"'; then ok "bridge advertises grif-cad model"; else bad "grif-cad model not advertised"; fail=$((fail+1)); fi
 
+  if curl -s -m 5 "$MODELS" 2>/dev/null | grep -q '"grif-cad-text-to-3d"'; then ok "bridge advertises studio modes"; else bad "studio modes not advertised (text-to-3d missing)"; fail=$((fail+1)); fi
+
+  c="$(http_code "http://127.0.0.1:$PORT/studio" 5)"
+  if [ "$c" = 200 ]; then ok "studio page HTTP 200 (:$PORT/studio)"; else bad "studio page HTTP ${c:-none}"; fail=$((fail+1)); fi
+
+  if curl -s -m 5 "http://127.0.0.1:$WEB_PORT/static/custom.css" 2>/dev/null | grep -q GrifCAD; then ok "GrifCAD skin served (custom.css)"; else bad "custom.css not served (skin mount missing?)"; fail=$((fail+1)); fi
+
   if docker exec "$CONTAINER" sh -c \
         "curl -s -m 5 http://host.docker.internal:$PORT/v1/models 2>/dev/null || wget -qO- http://host.docker.internal:$PORT/v1/models 2>/dev/null" \
         2>/dev/null | grep -q '"grif-cad"'; then
