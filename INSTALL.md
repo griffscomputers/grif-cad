@@ -98,8 +98,10 @@ to find the voice once in **Admin → Settings → Audio → Text-to-Speech**: e
 `http://host.docker.internal:8004/v1`, key `grifcad-local`, voice = your `.wav` name (the
 settings live in the web UI's database, so the automatic wiring only applies to fresh installs).
 
-Each sentence takes a couple of seconds to generate on the Mac's GPU — it starts speaking after
-the first sentence, so it feels quick.
+Each sentence takes about as long to generate as it does to say (5–7 s on the Mac's GPU), and
+speech starts after the first sentence. The stack pre-warms the voice at startup, so the first
+click doesn't pay the ~1 minute warm-up — if you read-aloud *immediately* after a start and it
+seems slow, give it one minute and try again.
 
 > **House rule:** cloned voices of real people are for personal use in this house only. The
 > voice files stay on this Mac — they're never committed or shared.
@@ -127,4 +129,8 @@ its own** — that always needs a person to confirm. This gate holds even throug
   running; it serves `http://localhost:8765`.
 - **No picture appears after a build** → the bridge serves images at `http://localhost:8765/files/…`;
   confirm `start.sh` is still running.
-- **Colima won't start** → `colima delete && colima start`.
+- **Colima won't start** → `colima delete`, then `bash scripts/stack.sh start` (it recreates the
+  VM with the right size).
+- **Chat "disconnects" or the mic gets stuck on "listening"** → the docker VM is out of memory
+  (speech-to-text needs headroom). Check with `colima list` — MEMORY should be **6GiB**, not 2.
+  Fix: `colima stop && colima start --memory 6 --cpu 4`, then `bash scripts/stack.sh start`.

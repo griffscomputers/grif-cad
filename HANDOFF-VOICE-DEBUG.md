@@ -1,5 +1,15 @@
 # HANDOFF-VOICE-DEBUG.md — Read-aloud works at the API, feels dead in the browser
 
+> **RESOLVED 2026-07-05.** Both symptoms were one root cause: the Colima VM's default
+> **2 GiB memory** — loading whisper for STT triggered kernel OOM kills of the Open WebUI
+> process (container restarted 11×), which dropped every websocket ("disconnects") and
+> swallowed the transcription ("stuck in listening"). Fixed by resizing the VM to
+> 6 GiB / 4 CPUs (`ensure_colima` now sizes new VMs), plus: TTS pre-warm on stack start
+> (kills the 68 s cold first-click), `BROWSER=/usr/bin/true` (no more UI tab popping on
+> restart), and TTS_BF16 tested → **crashes on MPS, left off**. `check --deep` ALL PASSED;
+> STT 1.0–1.5 s/sentence; warm TTS ≈ 5–7 s/sentence. Details: `tasks/lessons.md` → VOICE.
+> Kept for the evidence trail — everything below is historical.
+
 > Written 2026-07-04 at the end of the session that shipped the voice layer (commit
 > `c89ddb4`) and the Meshy studio build (commit `518f246`, committed by Grif). Launch a
 > fresh session from the grif-cad repo root and start here. Suggested prompt:
