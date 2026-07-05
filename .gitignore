@@ -22,6 +22,8 @@ voice/reference_audio/*.wav
 # local config (printer LAN address, bridge subscription token) — keep *.example only
 config/*.env
 !config/*.env.example
+# …except the voice/port wiring, which is deliberately tracked (holds no secrets)
+!config/voice.env
 
 # claude code local permission state
 .claude/settings.local.json
