@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How GrifCAD works — from idea to plastic</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151b26; --card:#1a2230; --card-edge:#2b3648;
+    --ink:#e6edf3; --muted:#8b98ab; --accent:#22d3ee; --accent-dim:#0e7490;
+    --amber:#fbbf24; --green:#4ade80; --wire:#3a4356;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  header{max-width:1240px;margin:28px auto 8px;padding:0 20px}
+  h1{font-size:26px;margin:0 0 6px}
+  h1 .zap{color:var(--accent)}
+  .sub{color:var(--muted);max-width:860px;margin:0 0 16px}
+  .sub b{color:var(--ink)}
+
+  /* journey buttons */
+  .journeys{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 6px}
+  .jbtn{background:var(--panel);border:1px solid var(--card-edge);color:var(--ink);
+        border-radius:999px;padding:8px 16px;font-size:14px;cursor:pointer;
+        transition:all .15s}
+  .jbtn:hover{border-color:var(--accent-dim)}
+  .jbtn.on{background:var(--accent);color:#06232a;border-color:var(--accent);font-weight:600}
+  #flowdesc{min-height:44px;color:var(--muted);font-size:14px;max-width:1000px;
+            padding:6px 2px}
+  #flowdesc b{color:var(--accent)}
+
+  /* diagram canvas */
+  .wrap{overflow-x:auto;padding:0 20px 30px}
+  #canvas{position:relative;width:1240px;height:880px;margin:0 auto}
+  svg#wires{position:absolute;inset:0;pointer-events:none;z-index:1}
+  path.wire{fill:none;stroke:var(--wire);stroke-width:2.2}
+  path.wire.dashed{stroke-dasharray:5 5}
+  path.wire.active{stroke:var(--accent);stroke-width:3;stroke-dasharray:9 7;
+                   animation:march .5s linear infinite}
+  @keyframes march{to{stroke-dashoffset:-16}}
+
+  .frame{position:absolute;border:1.5px dashed #33405a;border-radius:16px;z-index:0}
+  .frame .flabel{position:absolute;top:-11px;left:18px;background:var(--bg);
+                 padding:0 10px;font-size:13px;color:var(--muted);cursor:help}
+  .card{position:absolute;z-index:2;background:var(--card);
+        border:1.5px solid var(--card-edge);border-radius:14px;padding:12px 14px;
+        cursor:help;transition:opacity .2s,border-color .2s,box-shadow .2s}
+  .card .emoji{font-size:26px;line-height:1}
+  .card .name{font-weight:650;margin-top:6px}
+  .card .role{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .chip{display:inline-block;margin-top:8px;margin-right:5px;padding:1.5px 8px;
+        border-radius:999px;background:#0f1622;border:1px solid var(--card-edge);
+        color:var(--muted);font-size:11px;font-family:ui-monospace,Menlo,monospace}
+  .chip.gpu{color:var(--green);border-color:#234432}
+  .chip.warn{color:var(--amber);border-color:#4a3a14}
+  .card.lit{border-color:var(--accent);box-shadow:0 0 18px rgba(34,211,238,.25)}
+  .flow-on .card:not(.lit){opacity:.3}
+  .card.amber{border-color:#4a3a14}
+  .card.amber.lit{border-color:var(--amber);box-shadow:0 0 18px rgba(251,191,36,.3)}
+
+  /* tooltip */
+  #tip{position:fixed;z-index:10;display:none;width:330px;background:#0f1622;
+       border:1px solid var(--accent-dim);border-radius:12px;padding:14px 16px;
+       box-shadow:0 12px 40px rgba(0,0,0,.55);pointer-events:none}
+  #tip h3{margin:0 0 2px;font-size:16px}
+  #tip .ts{color:var(--accent);font-size:12px;margin-bottom:8px}
+  #tip p{margin:6px 0;font-size:13.5px;color:#c6d0dd}
+  #tip p.cool{color:var(--muted)}
+  #tip p.cool::before{content:"💡 ";}
+
+  footer{max-width:1240px;margin:0 auto 40px;padding:0 20px;color:var(--muted);font-size:13px}
+  @media (hover:none){ .card{cursor:pointer} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="zap">⚡</span> How GrifCAD works — from a sentence to a plastic part</h1>
+  <p class="sub">This whole system lives in our house. You <b>describe</b> a thing, an AI <b>writes code</b> that
+  builds its 3D shape, and a robot <b>prints it in plastic</b>.
+  <b>Hover over any box</b> to learn what it does, and <b>click a journey</b> below to watch the data flow through the machine.</p>
+  <div class="journeys">
+    <button class="jbtn" data-flow="design">💬 Design a part</button>
+    <button class="jbtn" data-flow="voicein">🎙️ Talk instead of type</button>
+    <button class="jbtn" data-flow="voiceout">🔊 It answers out loud</button>
+    <button class="jbtn" data-flow="print">🖨️ Print it for real</button>
+  </div>
+  <div id="flowdesc">Pick a journey to light up its path — or just start hovering.</div>
+</header>
+
+<div class="wrap">
+<div id="canvas">
+
+  <!-- zone frames -->
+  <div class="frame hoverable" id="macframe" style="left:225px;top:70px;width:960px;height:790px">
+    <span class="flabel">🖥️ The Mac — all the software runs here, at home</span>
+  </div>
+  <div class="frame hoverable" id="dockerframe" style="left:250px;top:110px;width:300px;height:370px">
+    <span class="flabel">📦 Docker box (Colima · 6 GB)</span>
+  </div>
+  <div class="frame hoverable" id="workshopframe" style="left:20px;top:615px;width:335px;height:245px">
+    <span class="flabel">🏠 The workshop (real world!)</span>
+  </div>
+
+  <!-- wires -->
+  <svg id="wires" width="1240" height="880">
+    <defs>
+      <marker id="mGray" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+        <path d="M1,1 L8,4.5 L1,8 Z" fill="#5b6577"/>
+      </marker>
+      <marker id="mCyan" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+        <path d="M1,1 L8,4.5 L1,8 Z" fill="#22d3ee"/>
+      </marker>
+      <marker id="mGrayS" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto">
+        <path d="M8,1 L1,4.5 L8,8 Z" fill="#5b6577"/>
+      </marker>
+      <marker id="mCyanS" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto">
+        <path d="M8,1 L1,4.5 L8,8 Z" fill="#22d3ee"/>
+      </marker>
+    </defs>
+    <path id="a1"  class="wire" d="M 190 300 C 235 285, 235 210, 271 205"/>
+    <path id="a11" class="wire" d="M 271 255 C 235 260, 235 355, 194 360"/>
+    <path id="a2"  class="wire" d="M 370 292 L 370 326"/>
+    <path id="a3"  class="wire" d="M 430 328 L 430 294"/>
+    <path id="a4"  class="wire" d="M 527 205 C 570 200, 573 215, 606 222"/>
+    <path id="a10" class="wire" d="M 608 305 C 573 305, 570 262, 529 252"/>
+    <path id="a5"  class="wire" d="M 832 235 C 862 230, 868 202, 896 197"/>
+    <path id="a6"  class="wire both" d="M 1015 292 L 1015 326"/>
+    <path id="a7"  class="wire" d="M 1132 265 C 1183 330, 1183 460, 1134 545"/>
+    <path id="a8"  class="wire" d="M 1015 652 L 1015 696"/>
+    <path id="a9"  class="wire" d="M 940 698 C 870 560, 790 430, 725 352"/>
+    <path id="a12" class="wire" d="M 500 292 C 575 340, 575 470, 505 548"/>
+    <path id="a13" class="wire" d="M 388 612 C 285 595, 148 540, 112 470"/>
+    <path id="a14" class="wire" d="M 898 770 L 864 770"/>
+    <path id="a15" class="wire" d="M 608 768 L 572 768"/>
+    <path id="a16" class="wire" d="M 436 768 L 344 768"/>
+    <path id="a17" class="wire dashed" d="M 1015 118 L 1018 64"/>
+  </svg>
+
+  <!-- cards -->
+  <div class="card hoverable" id="you" style="left:30px;top:250px;width:160px;height:215px">
+    <div class="emoji">🧑‍🚀</div>
+    <div class="name">You</div>
+    <div class="role">the designer — you describe the part, and later you say GO on prints</div>
+    <span class="chip">⌨️ type</span><span class="chip">🎙️ talk</span>
+  </div>
+
+  <div class="card hoverable" id="webui" style="left:275px;top:160px;width:250px;height:130px">
+    <div class="emoji">💬</div>
+    <div class="name">Open WebUI — the chat screen</div>
+    <div class="role">messages, pictures of parts, mic &amp; speaker buttons</div>
+    <span class="chip">localhost:3000</span>
+  </div>
+
+  <div class="card hoverable" id="whisper" style="left:275px;top:330px;width:250px;height:120px">
+    <div class="emoji">👂</div>
+    <div class="name">Whisper — the ears</div>
+    <div class="role">turns your recorded voice into written words</div>
+    <span class="chip">~1 s / sentence</span>
+  </div>
+
+  <div class="card hoverable" id="chatterbox" style="left:390px;top:550px;width:250px;height:140px">
+    <div class="emoji">🗣️</div>
+    <div class="name">Chatterbox — the voice</div>
+    <div class="role">reads replies out loud as JARVIS, cloned from a 20-second clip</div>
+    <span class="chip gpu">runs on the GPU</span><span class="chip">:8004</span>
+  </div>
+
+  <div class="card hoverable" id="bridge" style="left:610px;top:180px;width:220px;height:170px">
+    <div class="emoji">🌉</div>
+    <div class="name">The Bridge — the translator</div>
+    <div class="role">connects the chat app to Claude; serves part pictures &amp; the Studio gallery</div>
+    <span class="chip">:8765</span><span class="chip">Python</span>
+  </div>
+
+  <div class="card hoverable" id="claude" style="left:900px;top:120px;width:230px;height:170px">
+    <div class="emoji">🧠</div>
+    <div class="name">Claude Code — the brain</div>
+    <div class="role">reads your request, plans the part, writes the CAD code</div>
+    <span class="chip">sonnet → opus</span>
+  </div>
+
+  <div class="card hoverable" id="cloud" style="left:955px;top:5px;width:130px;height:55px;padding:8px 12px">
+    <div class="name" style="margin-top:0">☁️ Anthropic</div>
+    <div class="role">where Claude thinks</div>
+  </div>
+
+  <div class="card hoverable" id="skills" style="left:900px;top:330px;width:230px;height:130px">
+    <div class="emoji">📚</div>
+    <div class="name">Skills — the recipe cards</div>
+    <div class="role">step-by-step instructions Claude reads before working</div>
+    <span class="chip">/cad-scripting</span><span class="chip">/slice</span>
+  </div>
+
+  <div class="card hoverable" id="cad" style="left:900px;top:510px;width:230px;height:140px">
+    <div class="emoji">📐</div>
+    <div class="name">CAD engines — the hands</div>
+    <div class="role">OpenSCAD for fast sketches · CadQuery for precision parts</div>
+    <span class="chip">code → 3D model</span>
+  </div>
+
+  <div class="card hoverable" id="projects" style="left:900px;top:700px;width:230px;height:130px">
+    <div class="emoji">🗂️</div>
+    <div class="name">The parts library</div>
+    <div class="role">every part gets its own folder; browse them all in Studio</div>
+    <span class="chip">projects/&lt;slug&gt;/</span>
+  </div>
+
+  <div class="card hoverable" id="slicer" style="left:610px;top:700px;width:250px;height:155px">
+    <div class="emoji">🔪</div>
+    <div class="name">OrcaSlicer / Creality Print</div>
+    <div class="role">cuts the model into paper-thin layers and writes the printer's to-do list (G-code). Creality Print is itself a fork of Orca.</div>
+  </div>
+
+  <div class="card hoverable amber" id="gate" style="left:438px;top:700px;width:130px;height:130px">
+    <div class="emoji">🚦</div>
+    <div class="name">Human gate</div>
+    <div class="role">a person must say GO</div>
+  </div>
+
+  <div class="card hoverable" id="k2" style="left:40px;top:660px;width:300px;height:180px">
+    <div class="emoji">🖨️</div>
+    <div class="name">Creality K2 Plus — the robot</div>
+    <div class="role">melts plastic and draws the part, layer by layer, over Wi-Fi (Moonraker API)</div>
+    <span class="chip">350×350×350 mm</span><span class="chip warn">🔥 hot &amp; moving</span>
+  </div>
+
+</div>
+</div>
+
+<div id="tip"><h3></h3><div class="ts"></div><p class="what"></p><p class="cool"></p></div>
+
+<footer>Made for the workshop · hover anything, click a journey · GrifCAD 2026</footer>
+
+<script>
+const INFO = {
+  you:{t:"You — the designer",s:"the most important component",
+    w:"Everything starts with your words: “make me a phone stand that tilts back 15 degrees.” The clearer you are about size and purpose, the better the part comes out. Engineers call that description a spec.",
+    c:"You're also the safety system — nothing ever prints until a human checks it and says GO."},
+  webui:{t:"Open WebUI — the chat screen",s:"a chat website that runs on our own Mac",
+    w:"It looks like a chat app on the internet, but it's served from this computer — “localhost:3000” means “this very machine, door number 3000.” It shows the conversation, pictures of parts, and has the mic and speaker buttons.",
+    c:"The model picker doubles as a mode switcher: 3D Agent, Text-to-3D, Image-to-3D — each is really the same brain in a different mood."},
+  dockerframe:{t:"Docker box (a container)",s:"an app sealed in its own little world",
+    w:"The chat app is packed into a container: a sealed box with everything it needs inside, so it can't mess with the rest of the Mac (and the Mac can't accidentally break it). Colima is the engine that runs these boxes.",
+    c:"We gave the box 6 GB of memory. It once had only 2 GB — the listening part kept running out and crashing. More room fixed it."},
+  whisper:{t:"Whisper — the ears",s:"speech-to-text, fully offline",
+    w:"When you hold the mic button, your voice is recorded and Whisper turns the sound into written words. It runs entirely inside the Docker box — your voice never leaves the house.",
+    c:"It hears a whole sentence in about one second. The tech is a neural network trained on hundreds of thousands of hours of speech."},
+  chatterbox:{t:"Chatterbox — the voice",s:"text-to-speech with a cloned voice",
+    w:"It reads replies out loud in the JARVIS voice — which it learned from just a 20-second audio clip. No training session: the clip itself IS the voice.",
+    c:"It runs on the Mac's GPU (graphics chip) because each sentence takes billions of math operations — about 5–7 seconds per sentence. House rule: cloned voices of real people never leave this house."},
+  bridge:{t:"The Bridge — the translator",s:"a small Python web server, port 8765",
+    w:"The chat app speaks one API “language,” Claude speaks another. The Bridge sits in the middle: it takes your message, hands it to Claude, then sends the answer and part pictures back to the chat. A “port” is like a numbered door on a computer.",
+    c:"It also hosts Studio — a gallery page showing every part ever made, like a game inventory screen."},
+  claude:{t:"Claude Code — the brain",s:"an AI that writes programs",
+    w:"Claude reads your request and, instead of drawing the part, writes CAD code — a little program that computes the exact shape. It follows the recipe cards (skills) so parts come out printable.",
+    c:"Easy jobs use a fast model (Sonnet); tricky ones — assemblies, tight tolerances — automatically upgrade to a smarter one (Opus)."},
+  cloud:{t:"Anthropic's datacenter",s:"the one part that isn't in the house",
+    w:"The Claude program runs on our Mac, but the actual thinking happens on Anthropic's servers over the internet. Your voice recordings and part files stay home — only the conversation text travels.",
+    c:"That's why the design step needs internet, but printing an already-made part doesn't."},
+  skills:{t:"Skills — the recipe cards",s:"knowledge, written down",
+    w:"Before working, Claude reads step-by-step instructions we wrote: how to write good CAD code, how to slice, how to print safely, and to search for an existing model before building from scratch.",
+    c:"This is how the system gets smarter over time — when something goes wrong, we update the recipe, and it never makes that mistake again."},
+  cad:{t:"CAD engines — the hands",s:"OpenSCAD (fast) and CadQuery (precise)",
+    w:"These turn Claude's code into an actual 3D model file (an STL — the shape as thousands of tiny triangles). OpenSCAD is for quick sketches; CadQuery is for precision parts with exact tolerances.",
+    c:"The models are parametric — built from numbers. Change “15°” to “20°” and the whole part rebuilds itself instantly."},
+  projects:{t:"The parts library",s:"one folder per part, forever",
+    w:"Every part gets its own folder holding everything about it: the code, the pictures, the 3D file, and the printer instructions. Nothing gets lost — you can always come back and tweak an old design.",
+    c:"The Studio page (on the Bridge) shows them all with spinning 3D previews."},
+  slicer:{t:"The slicer — OrcaSlicer & Creality Print",s:"3D model in, G-code out",
+    w:"A printer can't print a whole shape at once — it draws it in stacked layers thinner than paper. The slicer cuts the model into those layers and writes G-code: the printer's to-do list. “Move here. Squirt plastic. Repeat” — about 100,000 times. We have two slicers: OrcaSlicer, and Creality Print — which is itself a fork of OrcaSlicer (a copy of its code that Creality took and reshaped for their printers).",
+    c:"The system slices automatically with OrcaSlicer, because it can be driven by code; Creality Print is for slicing by hand in its window. Same family tree, but their settings files are NOT interchangeable. Layer height, speed, and temperature all get decided here — same model + different slicing = very different print."},
+  gate:{t:"The human gate",s:"the one rule that never bends",
+    w:"A 3D printer is a hot machine that moves on its own — the nozzle runs at ~220–300 °C. So the system is forbidden from starting a print by itself. A person reads the material, temperatures, and print time, checks the bed is clear, and says GO.",
+    c:"Even the AI's own permission system blocks the print command — it physically can't press this button."},
+  k2:{t:"Creality K2 Plus — the robot",s:"where bytes become plastic",
+    w:"It melts plastic filament and draws the part layer by layer, following the G-code exactly. The Mac sends the file over Wi-Fi using Moonraker — the printer's remote-control API.",
+    c:"It can build parts up to 350×350×350 mm — about the size of a basketball — and its head accelerates harder than a sports car."},
+  macframe:{t:"The Mac",s:"the whole factory in one computer",
+    w:"Chat screen, ears, voice, translator, CAD engines, slicer — all of it runs here at home. The only thing that leaves the house is the conversation with Claude (see the little cloud).",
+    c:"That means your designs, your voice, and the JARVIS voice all stay private, on this machine."},
+  workshopframe:{t:"The workshop",s:"where the real world begins",
+    w:"Everything else on this page is software — this corner is physical. Hot metal, moving parts, melted plastic. That's why the traffic light stands guard right at the border.",
+    c:"The finished print pops off a flexible metal plate. Most parts take 20 minutes to a few hours."},
+};
+
+const FLOWS = {
+  design:{d:"<b>💬 Design a part:</b> you describe it → the chat hands it across the Bridge → Claude reads its recipe cards and writes CAD code (thinking in the cloud) → the engines build the 3D model → it's saved in the library → a picture flows back into your chat. Usually 30–90 seconds.",
+    n:["you","webui","bridge","claude","cloud","skills","cad","projects"],
+    p:["a1","a4","a5","a17","a6","a7","a8","a9","a10","a11"]},
+  voicein:{d:"<b>🎙️ Talk instead of type:</b> hold the mic → your voice is recorded in the browser → Whisper turns it into text right on the Mac (about a second) → the words drop into the chat box, ready to send.",
+    n:["you","webui","whisper"], p:["a1","a2","a3"]},
+  voiceout:{d:"<b>🔊 It answers out loud:</b> click the speaker on any reply → the text goes to Chatterbox → the GPU synthesizes JARVIS saying it (~5–7 s per sentence) → the audio plays back to you. Speech starts after the first sentence.",
+    n:["webui","chatterbox","you"], p:["a12","a13"]},
+  print:{d:"<b>🖨️ Print it for real:</b> pick a part from the library → OrcaSlicer cuts it into ~0.2 mm layers and writes the G-code → <b>STOP</b> at the traffic light: a human checks temps, time and the bed → only then does it fly over Wi-Fi to the printer.",
+    n:["projects","slicer","gate","k2"], p:["a14","a15","a16"]},
+};
+
+const tip = document.getElementById('tip');
+const canvas = document.getElementById('canvas');
+
+document.querySelectorAll('.hoverable').forEach(el=>{
+  el.addEventListener('mouseenter', e=>{ showTip(el.id); });
+  el.addEventListener('mousemove', e=>{ moveTip(e); });
+  el.addEventListener('mouseleave', ()=>{ tip.style.display='none'; });
+  el.addEventListener('click', e=>{ showTip(el.id); moveTip(e); e.stopPropagation(); });
+});
+document.body.addEventListener('click', ()=>{ tip.style.display='none'; });
+
+function showTip(id){
+  const i = INFO[id]; if(!i) return;
+  tip.querySelector('h3').textContent = i.t;
+  tip.querySelector('.ts').textContent = i.s;
+  tip.querySelector('.what').textContent = i.w;
+  tip.querySelector('.cool').textContent = i.c;
+  tip.style.display='block';
+}
+function moveTip(e){
+  const pad=18, w=346, h=tip.offsetHeight||200;
+  let x=e.clientX+pad, y=e.clientY+pad;
+  if(x+w>innerWidth) x=e.clientX-w-pad;
+  if(y+h>innerHeight-10) y=Math.max(10, e.clientY-h-pad);
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+
+let activeFlow=null;
+document.querySelectorAll('.jbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const f = btn.dataset.flow;
+    setFlow(activeFlow===f ? null : f);
+  });
+});
+function setFlow(f){
+  activeFlow=f;
+  document.querySelectorAll('.jbtn').forEach(b=>b.classList.toggle('on', b.dataset.flow===f));
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('lit'));
+  document.querySelectorAll('path.wire').forEach(p=>{
+    p.classList.remove('active');
+    p.setAttribute('marker-end','url(#mGray)');
+    if(p.classList.contains('both')) p.setAttribute('marker-start','url(#mGrayS)');
+  });
+  canvas.classList.toggle('flow-on', !!f);
+  const desc = document.getElementById('flowdesc');
+  if(!f){ desc.innerHTML='Pick a journey to light up its path — or just start hovering.'; return; }
+  const flow=FLOWS[f];
+  desc.innerHTML=flow.d;
+  flow.n.forEach(id=>document.getElementById(id)?.classList.add('lit'));
+  flow.p.forEach(id=>{
+    const p=document.getElementById(id); if(!p) return;
+    p.classList.add('active');
+    p.setAttribute('marker-end','url(#mCyan)');
+    if(p.classList.contains('both')) p.setAttribute('marker-start','url(#mCyanS)');
+  });
+}
+// default arrowheads
+document.querySelectorAll('path.wire').forEach(p=>{
+  p.setAttribute('marker-end','url(#mGray)');
+  if(p.classList.contains('both')) p.setAttribute('marker-start','url(#mGrayS)');
+});
+</script>
+</body>
+</html>
