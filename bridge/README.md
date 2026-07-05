@@ -17,8 +17,11 @@ Open WebUI ──/v1/chat/completions──▶ bridge ──spawns──▶ clau
 mean re-plumbing tools. A plain LLM proxy (LiteLLM) only relays chat and can't run OpenSCAD.
 
 ## Run — one command (recommended)
-`scripts/stack.sh` controls the whole stack (Colima → Open WebUI → bridge). The bridge runs
-**detached** — no terminal window or Claude session to keep open.
+`scripts/stack.sh` controls the whole stack (Colima → Open WebUI → bridge → **voice server**).
+The bridge runs **detached** — no terminal window or Claude session to keep open. The voice
+sibling (Chatterbox TTS, native MPS host process on `:8004`, installed by `voice/setup.sh`)
+serves `POST /v1/audio/speech` directly to Open WebUI for spoken replies — it never routes
+through this bridge. Wiring lives in `config/voice.env`.
 ```bash
 scripts/stack.sh start          # bring everything up (idempotent), prints the URL
 scripts/stack.sh check          # PASS/FAIL test of every layer (exit 1 on failure)

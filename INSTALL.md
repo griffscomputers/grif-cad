@@ -77,6 +77,33 @@ The mic works on `localhost` out of the box. If it doesn't transcribe, open
 **Admin → Settings → Audio → Speech-to-Text** and choose an engine (**Local Whisper** = offline;
 **Web API** = no download).
 
+### Give it a voice (optional, but very cool)
+The assistant can *speak its replies* in a custom voice — fully local, nothing leaves the Mac.
+It clones a voice from a short audio clip: 10–30 seconds of clean speech **is** the voice; no
+training step.
+
+```bash
+bash voice/setup.sh        # one-time install (first server start downloads ~2-3 GB of model)
+bash scripts/stack.sh restart
+```
+
+**Make it speak as anyone — you, ideally:**
+1. Record ~20 seconds of yourself reading anything. The Voice Memos app is perfect.
+2. `bash voice/make-reference.sh ~/Desktop/me.m4a myvoice`
+3. Set `VOICE_DEFAULT=myvoice.wav` in `config/voice.env`, then `scripts/stack.sh restart`.
+
+Then in the chat, click the **speaker icon** on any reply (or turn on auto-playback in
+Settings → Audio). First-time note: if the web UI was installed before the voice, tell it where
+to find the voice once in **Admin → Settings → Audio → Text-to-Speech**: engine **OpenAI**, URL
+`http://host.docker.internal:8004/v1`, key `grifcad-local`, voice = your `.wav` name (the
+settings live in the web UI's database, so the automatic wiring only applies to fresh installs).
+
+Each sentence takes a couple of seconds to generate on the Mac's GPU — it starts speaking after
+the first sentence, so it feels quick.
+
+> **House rule:** cloned voices of real people are for personal use in this house only. The
+> voice files stay on this Mac — they're never committed or shared.
+
 ## Stopping / starting again
 - Stop the web UI: `bash scripts/stop.sh` (and `colima stop` to stop the engine).
 - Start again later: `bash scripts/start.sh`.

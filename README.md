@@ -14,11 +14,13 @@ Then sign in once (`claude` + `claude setup-token` → `config/bridge.env`) and 
 bash scripts/start.sh      # then open http://localhost:3000
 ```
 Full walkthrough + troubleshooting: **[INSTALL.md](INSTALL.md)**.
+Want to clone the voice, reskin it, or fork the whole assistant into your own? **[docs/MAKE-IT-YOURS.md](docs/MAKE-IT-YOURS.md)**.
 
 ## Two ways to use it
 - **Browser / voice app** — `scripts/start.sh` → http://localhost:3000. Type or **speak** a
-  request and watch it render. Built to be friendly for a non-CLI user (a kid). Open WebUI →
-  the bridge → headless Claude Code; see `bridge/README.md`.
+  request, watch it render, and hear it **talk back in a cloned voice** (fully local — see
+  the voice section of `INSTALL.md`). Built to be friendly for a non-CLI user (a kid).
+  Open WebUI → the bridge → headless Claude Code; see `bridge/README.md`.
 - **Inside Claude Code** — the skills drive each stage directly: `/cad-scripting`,
   `/scan-cleanup`, `/slice`, `/print`. See `CLAUDE.md` for the pipeline, engine-selection rule, and safety rules.
 

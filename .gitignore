@@ -14,6 +14,11 @@ scans/raw/
 # NOT under projects/ so previews/catalog never mistake them for renders)
 uploads/
 
+# voice: the vendored TTS server (cloned+pinned by voice/setup.sh) and cloned-voice
+# reference WAVs (personal-use only — cloned real-person voices never leave this machine)
+voice/server/
+voice/reference_audio/*.wav
+
 # local config (printer LAN address, bridge subscription token) — keep *.example only
 config/*.env
 !config/*.env.example

@@ -23,10 +23,21 @@ cd "$proj"
 
 COMPOSE_FILE="deploy/docker-compose.yml"
 CONTAINER="grifcad-openwebui"
-WEB_PORT=3000
 RUN_DIR="$proj/.run"
 PIDFILE="$RUN_DIR/bridge.pid"
 LOGFILE="$RUN_DIR/bridge.log"
+
+# Voice + port wiring comes from config/voice.env (tracked); compose consumes the
+# same file via --env-file so there is a single source of wiring truth.
+VOICE_ENABLED=1; VOICE_PORT=8004; VOICE_DEFAULT=jarvis.wav; WEBUI_PORT=3000
+[ -f config/voice.env ] && . config/voice.env
+WEB_PORT="$WEBUI_PORT"
+VOICE_DIR="$proj/voice/server"
+VOICE_PIDFILE="$RUN_DIR/voice.pid"
+VOICE_LOGFILE="$RUN_DIR/voice.log"
+VOICE_HEALTH="http://127.0.0.1:$VOICE_PORT/api/ui/initial-data"
+
+compose(){ docker compose --env-file config/voice.env -f "$COMPOSE_FILE" "$@"; }
 
 # Bridge port comes from config/bridge.env (PORT=), default 8765.
 PORT="$(grep -E '^PORT=' config/bridge.env 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '[:space:]' || true)"
@@ -57,7 +68,7 @@ ensure_colima(){
 
 ensure_webui(){
   info "ensuring Open WebUI container…"
-  docker compose -f "$COMPOSE_FILE" up -d || { bad "docker compose up failed"; return 1; }
+  compose up -d || { bad "docker compose up failed"; return 1; }
   local i s
   for i in $(seq 1 60); do
     s="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$CONTAINER" 2>/dev/null || true)"
@@ -99,38 +110,86 @@ stop_bridge(){
   rm -f "$PIDFILE"
 }
 
+# ---- voice layer (Chatterbox TTS, native MPS host process) -------------------
+# Fork-safe: everything here skips cleanly when VOICE_ENABLED=0 or the engine
+# hasn't been installed (voice/setup.sh) — the stack must keep working without it.
+
+voice_enabled(){ [ "${VOICE_ENABLED:-1}" = 1 ] && [ -x "$VOICE_DIR/.venv/bin/python" ]; }
+voice_pid(){ lsof -ti tcp:"$VOICE_PORT" -sTCP:LISTEN 2>/dev/null | head -1; }
+voice_healthy(){ [ "$(http_code "$VOICE_HEALTH" 5)" = 200 ]; }
+
+start_voice(){
+  if ! voice_enabled; then ok "voice disabled/not installed — skipped (enable: bash voice/setup.sh)"; return 0; fi
+  if voice_healthy; then ok "voice already healthy (:$VOICE_PORT)"; return 0; fi
+  local existing; existing="$(voice_pid)"
+  if [ -n "$existing" ]; then
+    info "clearing stale voice listener on :$VOICE_PORT (pid $existing)..."; kill "$existing" 2>/dev/null || true; sleep 1
+  fi
+  info "starting voice server, detached (:$VOICE_PORT)..."
+  echo "----- $(date '+%Y-%m-%d %H:%M:%S') stack.sh start -----" >>"$VOICE_LOGFILE"
+  # PYTORCH_ENABLE_MPS_FALLBACK: torchaudio's resampler exceeds MPS's 65536-channel
+  # conv1d limit when prepping 44.1 kHz reference WAVs — that one op falls back to CPU.
+  ( cd "$VOICE_DIR" && PYTORCH_ENABLE_MPS_FALLBACK=1 nohup .venv/bin/python server.py </dev/null >>"$VOICE_LOGFILE" 2>&1 & echo $! >"$VOICE_PIDFILE" )
+  local i
+  for i in $(seq 1 120); do
+    voice_healthy && { ok "voice healthy (:$VOICE_PORT, pid $(cat "$VOICE_PIDFILE"))"; return 0; }
+    kill -0 "$(cat "$VOICE_PIDFILE" 2>/dev/null)" 2>/dev/null || { bad "voice server exited — see: tail .run/voice.log"; return 1; }
+    sleep 1
+  done
+  # Still warming — first start downloads the ~2-3 GB model. Don't fail the stack.
+  echo "  ${Y}..${N}  voice still warming after 120s (first start = model download) — watch: scripts/stack.sh logs voice"
+  return 0
+}
+
+stop_voice(){
+  voice_enabled || return 0
+  local pid; pid="$(voice_pid)"; [ -z "$pid" ] && pid="$(cat "$VOICE_PIDFILE" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    info "stopping voice server (pid $pid)..."
+    kill "$pid" 2>/dev/null || true
+    local i; for i in $(seq 1 10); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    kill -9 "$pid" 2>/dev/null || true
+    ok "voice stopped"
+  else ok "voice not running"; fi
+  rm -f "$VOICE_PIDFILE"
+}
+
 # ---- commands ---------------------------------------------------------------
 
 cmd_start(){
   ensure_colima || return 1
   ensure_webui  || return 1
   start_bridge  || return 1
+  start_voice   || return 1
   echo
   info "Open the assistant:  ${B}http://localhost:$WEB_PORT${N}   (pick the 'grif-cad' model)"
   info "Verify any time:     scripts/stack.sh check"
 }
 
 cmd_stop(){
+  stop_voice
   stop_bridge
   info "stopping Open WebUI container…"
-  docker compose -f "$COMPOSE_FILE" stop >/dev/null 2>&1 && ok "Open WebUI stopped" || bad "could not stop container"
+  compose stop >/dev/null 2>&1 && ok "Open WebUI stopped" || bad "could not stop container"
   echo
   info "docker engine left running (stop it with: colima stop)"
 }
 
 cmd_restart(){
   info "restarting the stack…"
+  stop_voice
   stop_bridge
   ensure_colima || return 1
   ensure_webui  || return 1
   start_bridge  || return 1
+  start_voice   || return 1
   echo; ok "stack restarted — http://localhost:$WEB_PORT"
 }
 
 cmd_down(){
   stop_bridge
   info "removing Open WebUI container…"
-  docker compose -f "$COMPOSE_FILE" down >/dev/null 2>&1 && ok "container removed (data volume kept)" || bad "compose down failed"
+  compose down >/dev/null 2>&1 && ok "container removed (data volume kept)" || bad "compose down failed"
   if [ "${1:-}" = "--colima" ]; then
     info "stopping docker engine…"; colima stop && ok "colima stopped"
   else
@@ -147,6 +206,11 @@ cmd_status(){
   if [ -n "$bp" ] && bridge_healthy; then echo "  bridge      ${G}healthy${N} (:$PORT, pid $bp)"
   elif [ -n "$bp" ]; then echo "  bridge      ${Y}listening but unhealthy${N} (:$PORT, pid $bp)"
   else echo "  bridge      ${R}down${N} (:$PORT)"; fi
+  local vp; vp="$(voice_pid)"
+  if ! voice_enabled; then echo "  voice       disabled/not installed"
+  elif [ -n "$vp" ] && voice_healthy; then echo "  voice       ${G}healthy${N} (:$VOICE_PORT, pid $vp)"
+  elif [ -n "$vp" ]; then echo "  voice       ${Y}listening but warming/unhealthy${N} (:$VOICE_PORT, pid $vp)"
+  else echo "  voice       ${R}down${N} (:$VOICE_PORT)"; fi
 }
 
 cmd_check(){
@@ -186,6 +250,29 @@ cmd_check(){
     ok "container → bridge wiring OK (host.docker.internal:$PORT)"
   else bad "container cannot reach bridge over host.docker.internal:$PORT"; fail=$((fail+1)); fi
 
+  if ! voice_enabled; then
+    ok "voice disabled/not installed — rows skipped"
+  else
+    if [ -n "$(voice_pid)" ]; then ok "voice listening (:$VOICE_PORT)"; else bad "nothing listening on :$VOICE_PORT"; fail=$((fail+1)); fi
+    if voice_healthy; then ok "voice health ok (/api/ui/initial-data)"; else bad "voice health failed (warming? see: scripts/stack.sh logs voice)"; fail=$((fail+1)); fi
+    if docker exec "$CONTAINER" sh -c \
+          "curl -s -m 5 -o /dev/null -w '%{http_code}' http://host.docker.internal:$VOICE_PORT/api/ui/initial-data 2>/dev/null || wget -q -O /dev/null -S http://host.docker.internal:$VOICE_PORT/api/ui/initial-data 2>&1" \
+          2>/dev/null | grep -q 200; then
+      ok "container → voice wiring OK (host.docker.internal:$VOICE_PORT)"
+    else bad "container cannot reach voice over host.docker.internal:$VOICE_PORT"; fail=$((fail+1)); fi
+  fi
+
+  if [ "$deep" = 1 ] && voice_enabled; then
+    info "deep: real speech synthesis (~2-6s on MPS)…"
+    local vbytes
+    vbytes="$(curl -s -m 120 -X POST "http://127.0.0.1:$VOICE_PORT/v1/audio/speech" \
+      -H 'Content-Type: application/json' \
+      -d "{\"model\":\"tts-1\",\"input\":\"All systems are online.\",\"voice\":\"$VOICE_DEFAULT\"}" \
+      -o /tmp/grifcad_voice_check.wav -w '%{size_download}' 2>/dev/null || echo 0)"
+    if [ "${vbytes:-0}" -gt 10000 ]; then ok "speech synthesis OK ($vbytes bytes → /tmp/grifcad_voice_check.wav)"
+    else bad "speech synthesis failed (voice=$VOICE_DEFAULT — reference WAV present?)"; fail=$((fail+1)); fi
+  fi
+
   if [ "$deep" = 1 ]; then
     info "deep: real chat round-trip (invokes Claude — may take ~30-60s)…"
     local body resp
@@ -204,8 +291,10 @@ cmd_check(){
 }
 
 cmd_logs(){
-  [ -f "$LOGFILE" ] || { echo "no bridge log yet ($LOGFILE)"; return 0; }
-  if [ "${1:-}" = "-f" ]; then tail -n 80 -f "$LOGFILE"; else tail -n 80 "$LOGFILE"; fi
+  local f="$LOGFILE" what="bridge"
+  if [ "${1:-}" = "voice" ] || [ "${2:-}" = "voice" ]; then f="$VOICE_LOGFILE"; what="voice"; fi
+  [ -f "$f" ] || { echo "no $what log yet ($f)"; return 0; }
+  if [ "${1:-}" = "-f" ] || [ "${2:-}" = "-f" ]; then tail -n 80 -f "$f"; else tail -n 80 "$f"; fi
 }
 
 usage(){ sed -n '2,20p' "$0"; }
@@ -216,7 +305,7 @@ case "${1:-}" in
   restart) cmd_restart ;;
   status)  cmd_status ;;
   check)   shift; cmd_check "${1:-}" ;;
-  logs)    shift; cmd_logs "${1:-}" ;;
+  logs)    shift; cmd_logs "${1:-}" "${2:-}" ;;
   down)    shift; cmd_down "${1:-}" ;;
   ""|-h|--help|help) usage ;;
   *) echo "unknown command: $1"; echo; usage; exit 2 ;;

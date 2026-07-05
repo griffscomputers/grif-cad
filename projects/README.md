@@ -43,6 +43,5 @@ scripts/project.sh reindex                                # heal the catalog fro
 scripts/project.sh path shed                              # print the folder path
 ```
 
-> **Note:** the web chat bridge still writes preview renders to `out/preview/` for now; moving the
-> bridge to write straight into `projects/<slug>/` is a tracked follow-up. CLI/`project.sh` parts are
-> already fully co-located here.
+> The web chat bridge renders straight into `projects/<slug>/` too, so chat-built and
+> CLI-built parts live the same way.

@@ -79,8 +79,19 @@ for name in printer bridge repos; do
   if [ -f "$ex" ] && [ ! -f "$cf" ]; then cp "$ex" "$cf"; ok "created $cf (edit it)"; else ok "$cf"; fi
 done
 
+# --- voice (optional but on by default): local cloned-voice TTS engine ---
+VOICE_ENABLED=1
+[ -f config/voice.env ] && . config/voice.env
+if [ "${VOICE_ENABLED:-1}" = 1 ]; then
+  say "Installing the voice engine (Chatterbox TTS — first *server start* later downloads ~2-3 GB of model weights)"
+  bash voice/setup.sh
+  ok "voice engine installed"
+else
+  ok "voice disabled (VOICE_ENABLED=0 in config/voice.env) — skipping"
+fi
+
 # --- executables + start the engine so first launch is smooth ---
-chmod +x scripts/*.sh bridge/run.sh setup.sh 2>/dev/null || true
+chmod +x scripts/*.sh bridge/run.sh setup.sh voice/*.sh 2>/dev/null || true
 say "Starting Colima (open-source docker engine)"
 colima status >/dev/null 2>&1 || colima start
 ok "colima running"
