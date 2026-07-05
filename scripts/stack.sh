@@ -53,6 +53,20 @@ ok(){   echo "  ${G}OK${N}  $*"; }
 bad(){  echo "  ${R}!!${N}  $*"; }
 
 http_code(){ curl -s -m "${2:-3}" -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || true; }
+
+# Run "$@" fully detached in its OWN SESSION (double-fork + setsid). nohup alone is
+# not enough: it survives shell exit but not a process-GROUP kill, which is exactly
+# what terminal cleanup / task managers send. macOS has no setsid binary → python3.
+detach(){
+  /usr/bin/python3 -c "
+import os, sys, subprocess
+if os.fork() == 0:
+    os.setsid()
+    subprocess.Popen(sys.argv[1:], stdin=subprocess.DEVNULL)
+    os._exit(0)
+os.wait()
+" "$@"
+}
 bridge_healthy(){ curl -s -m 3 "$HEALTH" 2>/dev/null | grep -q '"ok":true'; }
 bridge_pid(){ lsof -ti tcp:"$PORT" -sTCP:LISTEN 2>/dev/null | head -1; }
 
@@ -93,9 +107,7 @@ start_bridge(){
   fi
   info "starting bridge, detached (:$PORT)…"
   echo "----- $(date '+%Y-%m-%d %H:%M:%S') stack.sh start -----" >>"$LOGFILE"
-  nohup bash bridge/run.sh </dev/null >>"$LOGFILE" 2>&1 &
-  echo $! >"$PIDFILE"
-  disown 2>/dev/null || true
+  detach bash -c "echo \$\$ >'$PIDFILE'; exec >>'$LOGFILE' 2>&1 </dev/null; exec bash bridge/run.sh"
   local i
   for i in $(seq 1 40); do
     bridge_healthy && { ok "bridge healthy (:$PORT, pid $(cat "$PIDFILE"))"; return 0; }
@@ -128,10 +140,10 @@ warm_voice(){
   # Fire-and-forget synthesis so the first real read-aloud never eats the ~60 s
   # cold cost (MPS kernel warmup + encoding the reference voice). Detached: stack
   # start returns immediately; the request completes in the background (~60 s).
-  ( nohup curl -s -m 300 -X POST "http://127.0.0.1:$VOICE_PORT/v1/audio/speech" \
+  detach curl -s -m 300 -X POST "http://127.0.0.1:$VOICE_PORT/v1/audio/speech" \
       -H 'Content-Type: application/json' \
       -d "{\"model\":\"tts-1\",\"input\":\"All systems online.\",\"voice\":\"$VOICE_DEFAULT\"}" \
-      -o /dev/null </dev/null >/dev/null 2>&1 & ) 2>/dev/null
+      -o /dev/null
   ok "voice pre-warm fired (read-aloud at full speed in ~60s)"
 }
 
@@ -149,7 +161,9 @@ start_voice(){
   # TTS_BF16: engine auto-detect only checks CUDA, so MPS needs the explicit "on".
   # BROWSER=/usr/bin/true: the server unconditionally webbrowser.open()s its own UI
   # on startup — this makes that a no-op (it's a daemon; the UI stays reachable).
-  ( cd "$VOICE_DIR" && PYTORCH_ENABLE_MPS_FALLBACK=1 TTS_BF16="${VOICE_BF16:-off}" BROWSER=/usr/bin/true nohup .venv/bin/python server.py </dev/null >>"$VOICE_LOGFILE" 2>&1 & echo $! >"$VOICE_PIDFILE" )
+  detach bash -c "cd '$VOICE_DIR'; echo \$\$ >'$VOICE_PIDFILE'; \
+export PYTORCH_ENABLE_MPS_FALLBACK=1 TTS_BF16='${VOICE_BF16:-off}' BROWSER=/usr/bin/true; \
+exec >>'$VOICE_LOGFILE' 2>&1 </dev/null; exec .venv/bin/python server.py"
   local i
   for i in $(seq 1 120); do
     voice_healthy && { ok "voice healthy (:$VOICE_PORT, pid $(cat "$VOICE_PIDFILE"))"; warm_voice; return 0; }
