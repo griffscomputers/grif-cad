@@ -53,6 +53,13 @@ Decomposition heuristic: knowledge → **Skill**, context → **subagent**, capa
 
 ## Web / voice front end (Open WebUI → headless Claude Code)
 A browser chat (microphone + inline renders) for non-CLI use — see `bridge/README.md` and `deploy/docker-compose.yml`.
+
+### Hub vs standalone (`WEBUI_MODE`)
+`config/voice.env` sets `WEBUI_MODE` (an **exported env var overrides the file**, so the tracked default never changes):
+- **standalone** (default — **forks stay here**): `scripts/stack.sh start` runs this repo's OWN Open WebUI on `:3000`. Zero external dependencies; exactly the classic behavior.
+- **hub**: `WEBUI_MODE=hub scripts/stack.sh start` skips colima/container and starts only bridge (`:8765`) + voice (`:8004`); the SHARED grif-webui-hub cockpit (`~/Documents/Code/grif-webui-hub`, `:3001`) fronts the same bridge — pick `grif-cad` in its model picker. Caveat: Open WebUI has ONE TTS endpoint per instance, so the hub speaks in the **Friday** voice; the JARVIS voice needs standalone mode.
+
+Both UIs can run at once — they share the `:8765` bridge. `stop`/`restart`/`status`/`check`/`down` all branch on the same knob.
 - **Open WebUI** runs in Docker (Colima — open-source engine; `colima start`) at `http://localhost:3000`, pre-wired to the bridge. The image is **digest-pinned** and reskinned Meshy-dark via `deploy/webui/custom.css` (bind-mounted; static files copy at container **start** → CSS edits need `docker restart grifcad-openwebui`). `WEBUI_NAME=GrifCAD`.
 - **Modes (Meshy-style):** the bridge advertises five model ids so the picker doubles as a mode switcher — `grif-cad` (**3D Agent**, default), `grif-cad-text-to-3d` (one-shot), `grif-cad-image-to-3d` (photo/sketch → Claude vision → *parametric CAD* reconstruction; uploads land in `uploads/`, gitignored), plus `grif-cad-texturing` / `grif-cad-image-gen` — **parked** "coming soon" ids that answer instantly without spawning claude (they'd need raster image generation).
 - **`GET :8765/studio`** — GrifCAD Studio, a Meshy-style asset library of every `projects/<slug>/` part (iso thumbnails, viewer + slicer buttons); every chat reply with a model links to it (**📚 All parts**).

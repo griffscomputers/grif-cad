@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # stack.sh — one-command control for the grif-cad web assistant.
-# Three layers, started bottom-up:
+# Layers, started bottom-up (WEBUI_MODE=standalone, the default):
 #   1. Colima            — the docker engine
 #   2. Open WebUI        — browser chat container on :3000
 #   3. bridge            — headless Claude Code + OpenSCAD, detached, on :PORT (default 8765)
+#   4. voice             — Chatterbox TTS, native MPS host process on :8004
+# WEBUI_MODE=hub (config/voice.env, or exported env) skips layers 1-2: only bridge +
+# voice run, and the SHARED grif-webui-hub cockpit (:3001, its own repo) fronts them.
 #
 # Unlike start.sh's old foreground bridge, this detaches the bridge (nohup) so it
 # survives closing the terminal — no Claude session, no open window required.
@@ -30,7 +33,11 @@ LOGFILE="$RUN_DIR/bridge.log"
 # Voice + port wiring comes from config/voice.env (tracked); compose consumes the
 # same file via --env-file so there is a single source of wiring truth.
 VOICE_ENABLED=1; VOICE_PORT=8004; VOICE_DEFAULT=jarvis.wav; WEBUI_PORT=3000
+_env_webui_mode="${WEBUI_MODE:-}"   # exported env beats voice.env (shared checkout: son stays standalone)
 [ -f config/voice.env ] && . config/voice.env
+WEBUI_MODE="${_env_webui_mode:-${WEBUI_MODE:-standalone}}"
+HUB_URL="${HUB_URL:-http://localhost:3001}"
+hub_mode(){ [ "$WEBUI_MODE" = hub ]; }
 WEB_PORT="$WEBUI_PORT"
 VOICE_DIR="$proj/voice/server"
 VOICE_PIDFILE="$RUN_DIR/voice.pid"
@@ -51,6 +58,7 @@ if [ -t 1 ]; then G=$'\e[32m'; R=$'\e[31m'; Y=$'\e[33m'; B=$'\e[1m'; N=$'\e[0m';
 info(){ echo "${B}==>${N} $*"; }
 ok(){   echo "  ${G}OK${N}  $*"; }
 bad(){  echo "  ${R}!!${N}  $*"; }
+warn(){ echo "  ${Y}~~${N}  $*"; }
 
 http_code(){ curl -s -m "${2:-3}" -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || true; }
 
@@ -191,6 +199,17 @@ stop_voice(){
 # ---- commands ---------------------------------------------------------------
 
 cmd_start(){
+  if hub_mode; then
+    info "WEBUI_MODE=hub — no local Open WebUI; the shared cockpit fronts this stack"
+    start_bridge || return 1
+    start_voice  || return 1
+    if [ "$(http_code "$HUB_URL" 5)" = 200 ]; then ok "shared hub reachable ($HUB_URL)"
+    else warn "hub not answering at $HUB_URL — start it: ~/Documents/Code/grif-webui-hub/stack.sh up"; fi
+    echo
+    info "Open the shared cockpit:  ${B}$HUB_URL${N}   (pick the 'grif-cad' model)"
+    info "Verify any time:          scripts/stack.sh check"
+    return 0
+  fi
   ensure_colima || return 1
   ensure_webui  || return 1
   start_bridge  || return 1
@@ -203,6 +222,10 @@ cmd_start(){
 cmd_stop(){
   stop_voice
   stop_bridge
+  if hub_mode; then
+    info "hub mode — no local Open WebUI container to stop (the shared cockpit is its own repo)"
+    return 0
+  fi
   info "stopping Open WebUI container…"
   compose stop >/dev/null 2>&1 && ok "Open WebUI stopped" || bad "could not stop container"
   echo
@@ -213,6 +236,12 @@ cmd_restart(){
   info "restarting the stack…"
   stop_voice
   stop_bridge
+  if hub_mode; then
+    start_bridge || return 1
+    start_voice  || return 1
+    echo; ok "stack restarted (hub mode) — $HUB_URL"
+    return 0
+  fi
   ensure_colima || return 1
   ensure_webui  || return 1
   start_bridge  || return 1
@@ -221,6 +250,12 @@ cmd_restart(){
 }
 
 cmd_down(){
+  if hub_mode; then
+    stop_voice
+    stop_bridge
+    info "hub mode — nothing containerized here; the shared cockpit is torn down from its own repo"
+    return 0
+  fi
   stop_bridge
   info "removing Open WebUI container…"
   compose down >/dev/null 2>&1 && ok "container removed (data volume kept)" || bad "compose down failed"
@@ -233,10 +268,15 @@ cmd_down(){
 
 cmd_status(){
   local bp; bp="$(bridge_pid)"
-  echo "${B}grif-cad stack${N}"
-  colima status >/dev/null 2>&1 && echo "  colima      ${G}running${N}" || echo "  colima      ${R}stopped${N}"
-  local cs; cs="$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo absent)"
-  echo "  web ui      ${cs} (:$WEB_PORT)"
+  echo "${B}grif-cad stack${N}  (mode: $WEBUI_MODE)"
+  if hub_mode; then
+    if [ "$(http_code "$HUB_URL" 3)" = 200 ]; then echo "  hub         ${G}reachable${N} ($HUB_URL)"
+    else echo "  hub         ${R}unreachable${N} ($HUB_URL)"; fi
+  else
+    colima status >/dev/null 2>&1 && echo "  colima      ${G}running${N}" || echo "  colima      ${R}stopped${N}"
+    local cs; cs="$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo absent)"
+    echo "  web ui      ${cs} (:$WEB_PORT)"
+  fi
   if [ -n "$bp" ] && bridge_healthy; then echo "  bridge      ${G}healthy${N} (:$PORT, pid $bp)"
   elif [ -n "$bp" ]; then echo "  bridge      ${Y}listening but unhealthy${N} (:$PORT, pid $bp)"
   else echo "  bridge      ${R}down${N} (:$PORT)"; fi
@@ -250,6 +290,13 @@ cmd_status(){
 cmd_check(){
   local deep=0; [ "${1:-}" = "--deep" ] && deep=1
   local fail=0
+  local c
+  if hub_mode; then
+    echo "${B}grif-cad stack check${N}  (mode: hub — shared cockpit $HUB_URL, bridge :$PORT)"
+    c="$(http_code "$HUB_URL" 5)"
+    if [ "$c" = 200 ]; then ok "shared hub HTTP 200 ($HUB_URL)"
+    else bad "shared hub HTTP ${c:-none} ($HUB_URL) — start it: ~/Documents/Code/grif-webui-hub/stack.sh up"; fail=$((fail+1)); fi
+  else
   echo "${B}grif-cad stack check${N}  (web :$WEB_PORT, bridge :$PORT)"
 
   if colima status >/dev/null 2>&1; then ok "colima running"; else bad "colima not running"; fail=$((fail+1)); fi
@@ -260,8 +307,9 @@ cmd_check(){
   hs="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$CONTAINER" 2>/dev/null || true)"
   if [ "$cs" = running ]; then ok "container $CONTAINER running${hs:+ ($hs)}"; else bad "container $CONTAINER not running (state: ${cs:-absent})"; fail=$((fail+1)); fi
 
-  local c; c="$(http_code "http://127.0.0.1:$WEB_PORT" 5)"
+  c="$(http_code "http://127.0.0.1:$WEB_PORT" 5)"
   if [ "$c" = 200 ]; then ok "Open WebUI HTTP 200 (:$WEB_PORT)"; else bad "Open WebUI HTTP ${c:-none} (:$WEB_PORT)"; fail=$((fail+1)); fi
+  fi
 
   local bp; bp="$(bridge_pid)"
   if [ -n "$bp" ]; then ok "bridge listening (:$PORT, pid $bp)"; else bad "nothing listening on :$PORT"; fail=$((fail+1)); fi
@@ -276,20 +324,24 @@ cmd_check(){
   c="$(http_code "http://127.0.0.1:$PORT/studio" 5)"
   if [ "$c" = 200 ]; then ok "studio page HTTP 200 (:$PORT/studio)"; else bad "studio page HTTP ${c:-none}"; fail=$((fail+1)); fi
 
-  if curl -s -m 5 "http://127.0.0.1:$WEB_PORT/static/custom.css" 2>/dev/null | grep -q GrifCAD; then ok "GrifCAD skin served (custom.css)"; else bad "custom.css not served (skin mount missing?)"; fail=$((fail+1)); fi
+  if ! hub_mode; then
+    if curl -s -m 5 "http://127.0.0.1:$WEB_PORT/static/custom.css" 2>/dev/null | grep -q GrifCAD; then ok "GrifCAD skin served (custom.css)"; else bad "custom.css not served (skin mount missing?)"; fail=$((fail+1)); fi
 
-  if docker exec "$CONTAINER" sh -c \
-        "curl -s -m 5 http://host.docker.internal:$PORT/v1/models 2>/dev/null || wget -qO- http://host.docker.internal:$PORT/v1/models 2>/dev/null" \
-        2>/dev/null | grep -q '"grif-cad"'; then
-    ok "container → bridge wiring OK (host.docker.internal:$PORT)"
-  else bad "container cannot reach bridge over host.docker.internal:$PORT"; fail=$((fail+1)); fi
+    if docker exec "$CONTAINER" sh -c \
+          "curl -s -m 5 http://host.docker.internal:$PORT/v1/models 2>/dev/null || wget -qO- http://host.docker.internal:$PORT/v1/models 2>/dev/null" \
+          2>/dev/null | grep -q '"grif-cad"'; then
+      ok "container → bridge wiring OK (host.docker.internal:$PORT)"
+    else bad "container cannot reach bridge over host.docker.internal:$PORT"; fail=$((fail+1)); fi
+  fi
 
   if ! voice_enabled; then
     ok "voice disabled/not installed — rows skipped"
   else
     if [ -n "$(voice_pid)" ]; then ok "voice listening (:$VOICE_PORT)"; else bad "nothing listening on :$VOICE_PORT"; fail=$((fail+1)); fi
     if voice_healthy; then ok "voice health ok (/api/ui/initial-data)"; else bad "voice health failed (warming? see: scripts/stack.sh logs voice)"; fail=$((fail+1)); fi
-    if docker exec "$CONTAINER" sh -c \
+    if hub_mode; then
+      warn "hub mode: this hub's TTS stays the Friday voice — the JARVIS voice needs the standalone UI"
+    elif docker exec "$CONTAINER" sh -c \
           "curl -s -m 5 -o /dev/null -w '%{http_code}' http://host.docker.internal:$VOICE_PORT/api/ui/initial-data 2>/dev/null || wget -q -O /dev/null -S http://host.docker.internal:$VOICE_PORT/api/ui/initial-data 2>&1" \
           2>/dev/null | grep -q 200; then
       ok "container → voice wiring OK (host.docker.internal:$VOICE_PORT)"
