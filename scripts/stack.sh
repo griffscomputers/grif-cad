@@ -22,7 +22,7 @@
 set -uo pipefail
 
 proj="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$proj"
+cd "$proj" || exit 1
 
 COMPOSE_FILE="deploy/docker-compose.yml"
 CONTAINER="grifcad-openwebui"
@@ -95,16 +95,15 @@ ensure_colima(){
     # Open WebUI's python whenever STT loads whisper, dropping every websocket.
     info "creating colima VM (6 GiB / 4 CPUs)…"; colima start --memory 6 --cpu 4
   fi
-  local i
-  for i in $(seq 1 30); do docker info >/dev/null 2>&1 && return 0; sleep 1; done
+  for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && return 0; sleep 1; done
   bad "docker engine not reachable after 30s"; return 1
 }
 
 ensure_webui(){
   info "ensuring Open WebUI container…"
   compose up -d || { bad "docker compose up failed"; return 1; }
-  local i s
-  for i in $(seq 1 60); do
+  local s
+  for _ in $(seq 1 60); do
     s="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$CONTAINER" 2>/dev/null || true)"
     [ "$s" = healthy ] && { ok "Open WebUI healthy (:$WEB_PORT)"; return 0; }
     sleep 1
@@ -122,8 +121,7 @@ start_bridge(){
   info "starting bridge, detached (:$PORT)…"
   echo "----- $(date '+%Y-%m-%d %H:%M:%S') stack.sh start -----" >>"$LOGFILE"
   detach bash -c "echo \$\$ >'$PIDFILE'; exec >>'$LOGFILE' 2>&1 </dev/null; exec bash bridge/run.sh"
-  local i
-  for i in $(seq 1 40); do
+  for _ in $(seq 1 40); do
     bridge_healthy && { ok "bridge healthy (:$PORT, pid $(cat "$PIDFILE"))"; return 0; }
     sleep 1
   done
@@ -135,7 +133,7 @@ stop_bridge(){
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
     info "stopping bridge (pid $pid)…"
     kill "$pid" 2>/dev/null || true
-    local i; for i in $(seq 1 10); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    for _ in $(seq 1 10); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
     kill -9 "$pid" 2>/dev/null || true
     ok "bridge stopped"
   else ok "bridge not running"; fi
@@ -178,8 +176,7 @@ start_voice(){
   detach bash -c "cd '$VOICE_DIR'; echo \$\$ >'$VOICE_PIDFILE'; \
 export PYTORCH_ENABLE_MPS_FALLBACK=1 TTS_BF16='${VOICE_BF16:-off}' BROWSER=/usr/bin/true; \
 exec >>'$VOICE_LOGFILE' 2>&1 </dev/null; exec .venv/bin/python server.py"
-  local i
-  for i in $(seq 1 120); do
+  for _ in $(seq 1 120); do
     voice_healthy && { ok "voice healthy (:$VOICE_PORT, pid $(cat "$VOICE_PIDFILE"))"; warm_voice; return 0; }
     kill -0 "$(cat "$VOICE_PIDFILE" 2>/dev/null)" 2>/dev/null || { bad "voice server exited — see: tail .run/voice.log"; return 1; }
     sleep 1
@@ -195,7 +192,7 @@ stop_voice(){
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
     info "stopping voice server (pid $pid)..."
     kill "$pid" 2>/dev/null || true
-    local i; for i in $(seq 1 10); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+    for _ in $(seq 1 10); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
     kill -9 "$pid" 2>/dev/null || true
     ok "voice stopped"
   else ok "voice not running"; fi

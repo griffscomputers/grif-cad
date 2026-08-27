@@ -1,0 +1,22 @@
+# Keeps the sweep from silently rotting again. Everything targets dev — main is
+# only ever fast-forwarded from a green dev, never written to directly.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: monthly }
+    target-branch: dev
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule: { interval: monthly }
+    target-branch: dev
+    # The Open WebUI image is digest-pinned because the GrifCAD skin and the
+    # seeded AUDIO_TTS_* settings ride on it — review these bumps by hand.
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    target-branch: dev

@@ -64,7 +64,7 @@ if cs and not shutil.which(f"docker-credential-{cs}"):
 p.write_text(json.dumps(cfg, indent=2))
 print("  done")
 PY
-ok "~/.docker/config.json"
+ok "$HOME/.docker/config.json"
 
 # --- Python venv + deps ---
 say "Python 3.12 venv + CAD/bridge dependencies"

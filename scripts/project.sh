@@ -16,7 +16,7 @@
 set -uo pipefail
 
 proj="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$proj"
+cd "$proj" || exit 1
 INDEX="projects/index.tsv"
 HEADER=$'slug\tcreated\tupdated\tengine\ttitle\tstatus\tfiles\ttags\tnote'
 

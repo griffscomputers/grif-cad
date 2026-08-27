@@ -1,0 +1,62 @@
+# CI cannot run the real stack: GitHub runners have no Colima, no Apple MPS, and no
+# Claude subscription. So this workflow covers only what is checkable in isolation.
+# The full end-to-end gate is `scripts/stack.sh check --deep`, run locally on dev
+# before promoting to main. See SECURITY.md and CLAUDE.md.
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Bridge tests (safety gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Create venv (Python 3.12 — CadQuery has no verified 3.13 wheels)
+        run: uv venv --python 3.12 .venv
+      - name: Install bridge + test deps
+        # Deliberately NOT the full requirements.txt: cadquery/pymeshlab are heavy
+        # native wheels the bridge tests never import.
+        run: |
+          uv pip install --python .venv/bin/python \
+            fastapi==0.138.0 uvicorn==0.49.0 -r requirements-dev.txt
+      - name: Run tests
+        run: .venv/bin/python -m pytest tests/ -v
+
+  shell:
+    name: Shell lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=warning \
+            setup.sh bridge/run.sh scripts/*.sh voice/*.sh
+
+  compose:
+    name: Compose config validates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: docker compose config
+        run: docker compose --env-file config/voice.env -f deploy/docker-compose.yml config >/dev/null
+
+  deps:
+    name: Runtime deps resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - name: Resolve requirements.txt on 3.12
+        run: uv pip compile requirements.txt --python-version 3.12 --quiet --output-file /dev/null
