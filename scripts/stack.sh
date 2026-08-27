@@ -44,11 +44,17 @@ VOICE_PIDFILE="$RUN_DIR/voice.pid"
 VOICE_LOGFILE="$RUN_DIR/voice.log"
 VOICE_HEALTH="http://127.0.0.1:$VOICE_PORT/api/ui/initial-data"
 
-compose(){ docker compose --env-file config/voice.env -f "$COMPOSE_FILE" "$@"; }
-
-# Bridge port comes from config/bridge.env (PORT=), default 8765.
+# Bridge port + shared secret come from config/bridge.env (gitignored), same idiom.
 PORT="$(grep -E '^PORT=' config/bridge.env 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '[:space:]' || true)"
 PORT="${PORT:-8765}"
+# Exported so `docker compose` substitutes ${BRIDGE_TOKEN} in the compose file: it is
+# loaded from --env-file config/voice.env only, and the secret must NOT live there.
+BRIDGE_TOKEN="$(grep -E '^BRIDGE_TOKEN=' config/bridge.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '[:space:]' || true)"
+export BRIDGE_TOKEN
+# Auth header for the bridge's /v1/* checks below (empty array when no token is set).
+if [ -n "$BRIDGE_TOKEN" ]; then AUTH=(-H "Authorization: Bearer $BRIDGE_TOKEN"); else AUTH=(); fi
+
+compose(){ docker compose --env-file config/voice.env -f "$COMPOSE_FILE" "$@"; }
 HEALTH="http://127.0.0.1:$PORT/healthz"
 MODELS="http://127.0.0.1:$PORT/v1/models"
 
@@ -317,18 +323,34 @@ cmd_check(){
   local hz; hz="$(curl -s -m 5 "$HEALTH" 2>/dev/null || true)"
   if echo "$hz" | grep -q '"ok":true'; then ok "bridge /healthz ok ${hz//[[:space:]]/}"; else bad "bridge /healthz failed"; fail=$((fail+1)); fi
 
-  if curl -s -m 5 "$MODELS" 2>/dev/null | grep -q '"grif-cad"'; then ok "bridge advertises grif-cad model"; else bad "grif-cad model not advertised"; fail=$((fail+1)); fi
+  if curl -s -m 5 "${AUTH[@]}" "$MODELS" 2>/dev/null | grep -q '"grif-cad"'; then ok "bridge advertises grif-cad model"; else bad "grif-cad model not advertised"; fail=$((fail+1)); fi
 
-  if curl -s -m 5 "$MODELS" 2>/dev/null | grep -q '"grif-cad-text-to-3d"'; then ok "bridge advertises studio modes"; else bad "studio modes not advertised (text-to-3d missing)"; fail=$((fail+1)); fi
+  if curl -s -m 5 "${AUTH[@]}" "$MODELS" 2>/dev/null | grep -q '"grif-cad-text-to-3d"'; then ok "bridge advertises studio modes"; else bad "studio modes not advertised (text-to-3d missing)"; fail=$((fail+1)); fi
 
   c="$(http_code "http://127.0.0.1:$PORT/studio" 5)"
   if [ "$c" = 200 ]; then ok "studio page HTTP 200 (:$PORT/studio)"; else bad "studio page HTTP ${c:-none}"; fail=$((fail+1)); fi
 
+  # Auth gate: an unauthenticated /v1 call must be refused. This is the assertion that
+  # keeps the LAN hole closed — if it ever reports 200, the bridge is serving an agent
+  # with write access to anyone who can reach the port. See SECURITY.md.
+  if [ -n "$BRIDGE_TOKEN" ]; then
+    c="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$PORT/v1/models" 2>/dev/null || true)"
+    if [ "$c" = 401 ]; then ok "bridge rejects unauthenticated /v1 (401)"
+    else bad "bridge answered ${c:-none} to an UNAUTHENTICATED /v1 request (expected 401)"; fail=$((fail+1)); fi
+  else
+    warn "BRIDGE_TOKEN not set — /v1/* is UNAUTHENTICATED (see SECURITY.md)"
+  fi
+
   if ! hub_mode; then
     if curl -s -m 5 "http://127.0.0.1:$WEB_PORT/static/custom.css" 2>/dev/null | grep -q GrifCAD; then ok "GrifCAD skin served (custom.css)"; else bad "custom.css not served (skin mount missing?)"; fail=$((fail+1)); fi
 
+    _hdr=""; _whdr=""
+    if [ -n "$BRIDGE_TOKEN" ]; then
+      _hdr="-H 'Authorization: Bearer $BRIDGE_TOKEN'"
+      _whdr="--header='Authorization: Bearer $BRIDGE_TOKEN'"
+    fi
     if docker exec "$CONTAINER" sh -c \
-          "curl -s -m 5 http://host.docker.internal:$PORT/v1/models 2>/dev/null || wget -qO- http://host.docker.internal:$PORT/v1/models 2>/dev/null" \
+          "curl -s -m 5 $_hdr http://host.docker.internal:$PORT/v1/models 2>/dev/null || wget -qO- $_whdr http://host.docker.internal:$PORT/v1/models 2>/dev/null" \
           2>/dev/null | grep -q '"grif-cad"'; then
       ok "container → bridge wiring OK (host.docker.internal:$PORT)"
     else bad "container cannot reach bridge over host.docker.internal:$PORT"; fail=$((fail+1)); fi
@@ -363,7 +385,7 @@ cmd_check(){
     info "deep: real chat round-trip (invokes Claude — may take ~30-60s)…"
     local body resp
     body='{"model":"grif-cad","stream":false,"messages":[{"role":"user","content":"Reply with the single word READY and nothing else."}]}'
-    resp="$(curl -s -m 180 -H 'Content-Type: application/json' -d "$body" "http://127.0.0.1:$PORT/v1/chat/completions" 2>/dev/null || true)"
+    resp="$(curl -s -m 180 "${AUTH[@]}" -H 'Content-Type: application/json' -d "$body" "http://127.0.0.1:$PORT/v1/chat/completions" 2>/dev/null || true)"
     if echo "$resp" | "$proj/.venv/bin/python" -c \
         'import sys,json;d=json.load(sys.stdin);c=d["choices"][0]["message"]["content"];print(c.strip()[:60]);sys.exit(0 if c.strip() else 1)' \
         >/tmp/grifcad_deep 2>/dev/null; then

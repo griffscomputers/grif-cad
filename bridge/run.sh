@@ -18,6 +18,17 @@ if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
   echo "      Run 'claude setup-token' for a durable token when running this as a service." >&2
 fi
 
+# The bridge is an AI agent with write access — an open port is a real hole.
+# BRIDGE_TOKEN is the control (Open WebUI sends it as its OpenAI key); the bind
+# address is NOT, because the Open WebUI container reaches us over
+# host.docker.internal, which does not arrive on loopback. See SECURITY.md.
+if [ -z "${BRIDGE_TOKEN:-}" ]; then
+  echo "WARNING: BRIDGE_TOKEN is not set — /v1/* is UNAUTHENTICATED." >&2
+  echo "         Anyone who can reach ${BRIDGE_HOST:-0.0.0.0}:${PORT:-8765} gets an agent" >&2
+  echo "         with write access to this repo, on your Claude subscription." >&2
+  echo "         Fix: set BRIDGE_TOKEN in config/bridge.env (see SECURITY.md)." >&2
+fi
+
 export PROJECT_DIR="$proj"
 exec "$proj/.venv/bin/python" -m uvicorn app:app \
-  --host 0.0.0.0 --port "${PORT:-8765}" --app-dir "$here"
+  --host "${BRIDGE_HOST:-0.0.0.0}" --port "${PORT:-8765}" --app-dir "$here"

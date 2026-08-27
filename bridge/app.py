@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -38,6 +39,11 @@ PROJECT_DIR = Path(os.environ.get("PROJECT_DIR", Path(__file__).resolve().parent
 PROJECTS_DIR = PROJECT_DIR / "projects"
 PORT = int(os.environ.get("PORT", "8765"))
 PUBLIC_BASE = os.environ.get("PUBLIC_BASE", f"http://localhost:{PORT}").rstrip("/")
+# Shared secret guarding /v1/*. Open WebUI already sends its OpenAI "API key" as an
+# Authorization: Bearer header, so honouring it costs no UI-side plumbing. Empty means
+# the bridge is OPEN — run.sh warns loudly, and SECURITY.md explains why that is a
+# LAN-exposed AI agent with write access. setup.sh generates one on first run.
+BRIDGE_TOKEN = os.environ.get("BRIDGE_TOKEN", "").strip()
 MODEL = os.environ.get("GRIFCAD_MODEL", "sonnet")          # base model (normal requests)
 MODEL_MAX = os.environ.get("GRIFCAD_MODEL_MAX", "opus")    # escalation model (hard requests)
 AUTOROUTE = os.environ.get("GRIFCAD_AUTOROUTE", "1").lower() not in ("0", "false", "no", "off")
@@ -145,6 +151,30 @@ SESSIONS: dict[str, str] = {}
 app = FastAPI(title="grif-cad bridge")
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=str(PROJECTS_DIR)), name="files")
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    """Bearer gate on /v1/*.
+
+    Scoped to /v1 deliberately: those are the OpenAI-client routes, and an OpenAI
+    client always sends the header. The browser-facing pages (/files, /view, /studio,
+    /slicer/open) are loaded directly by the browser as top-level URLs or <img> src,
+    which cannot carry an Authorization header. /healthz stays open so `stack.sh
+    check` works without holding the secret.
+    """
+    if BRIDGE_TOKEN and request.url.path.startswith("/v1/"):
+        sent = request.headers.get("authorization", "")
+        scheme, _, value = sent.partition(" ")
+        # compare_digest on both halves: constant-time, and never leaks length via
+        # an early return on the scheme check.
+        if scheme.lower() != "bearer" or not hmac.compare_digest(value.strip(), BRIDGE_TOKEN):
+            return JSONResponse(
+                {"error": {"message": "Invalid or missing bearer token. See SECURITY.md.",
+                           "type": "invalid_request_error", "code": "invalid_api_key"}},
+                status_code=401,
+            )
+    return await call_next(request)
 
 
 # ---------------------------------------------------------------- helpers

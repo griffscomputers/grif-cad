@@ -7,12 +7,13 @@
 #   open http://localhost:3000
 #
 # Then in Open WebUI: Admin → Settings → Connections → OpenAI → add
-#   URL:  http://host.docker.internal:8765/v1     key: anything (the bridge ignores it)
+#   URL:  http://host.docker.internal:8765/v1     key: your BRIDGE_TOKEN (config/bridge.env)
 # The "grif-cad" model then appears in the chat model picker.
 services:
   open-webui:
-    # Pinned by digest (was :main, v0.9.6 build 02dc3e689ce): webui/custom.css targets this
-    # exact build's DOM/theme variables. Bump deliberately and re-test the skin.
+    # Pinned by digest for reproducibility. The skin (webui/custom.css) is only 34 lines
+    # and its sole upstream selector is `.dark`, so it survives most bumps — but bump
+    # deliberately and re-run `scripts/stack.sh check` anyway.
     image: ghcr.io/open-webui/open-webui@sha256:7f1b0a1a50cfbac23da3b16f96bc968fd757b26dc9e54e93813d61768ea9184e
     container_name: grifcad-openwebui
     ports:
@@ -33,7 +34,7 @@ services:
       # Pre-wire the grif-cad bridge as the model backend — no admin clicking needed.
       - ENABLE_OPENAI_API=true
       - OPENAI_API_BASE_URL=http://host.docker.internal:${BRIDGE_PORT:-8765}/v1
-      - OPENAI_API_KEY=grifcad-local       # the bridge ignores the key
+      - OPENAI_API_KEY=${BRIDGE_TOKEN:-}   # the bridge ENFORCES this as a Bearer token
       - ENABLE_OLLAMA_API=false            # no local model; brain is Claude via the bridge
       # Branding. Renders as "GrifCAD (Open WebUI)" — the suffix is baked in upstream.
       # (Never use CUSTOM_NAME: it phones home to api.openwebui.com.)

@@ -79,6 +79,22 @@ for name in printer bridge repos; do
   if [ -f "$ex" ] && [ ! -f "$cf" ]; then cp "$ex" "$cf"; ok "created $cf (edit it)"; else ok "$cf"; fi
 done
 
+# The bridge is an AI agent with write access; an unauthenticated port is a real hole.
+# Generate the shared secret so a fresh fork is closed by DEFAULT, not after reading docs.
+# Open WebUI sends it as its OpenAI "API key", so no UI-side setup is needed.
+if [ -f config/bridge.env ] && ! grep -qE '^BRIDGE_TOKEN=.+' config/bridge.env; then
+  tok="$(openssl rand -hex 32)"
+  if grep -qE '^BRIDGE_TOKEN=' config/bridge.env; then
+    # portable in-place edit (BSD sed on macOS needs the empty -i arg)
+    sed -i '' "s|^BRIDGE_TOKEN=.*|BRIDGE_TOKEN=$tok|" config/bridge.env
+  else
+    printf '\nBRIDGE_TOKEN=%s\n' "$tok" >> config/bridge.env
+  fi
+  ok "generated BRIDGE_TOKEN in config/bridge.env (bridge /v1/* is now authenticated)"
+else
+  ok "BRIDGE_TOKEN present"
+fi
+
 # --- voice (optional but on by default): local cloned-voice TTS engine ---
 VOICE_ENABLED=1
 [ -f config/voice.env ] && . config/voice.env
