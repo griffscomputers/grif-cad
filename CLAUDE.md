@@ -19,7 +19,7 @@ Units are **millimeters, always.** Each part gets a `<slug>` and **its own folde
 | 0 · Spec | — | function, key dims, material, tolerances | always first — pin dimensions before modeling |
 | 1 · Prototype | **OpenSCAD** | `projects/<slug>/<slug>.stl` | default start: fast, parametric, form/fit checks |
 | 2 · Production | **CadQuery** | `projects/<slug>/<slug>.stl` + `.step` | tolerances, assemblies, fillets/lofts, STEP archive, data-driven geometry |
-| 3 · Scan-assist | **pymeshlab** ⚠️ | `scans/clean/<slug>.ply` | reverse-engineer an existing object; feeds stage 1/2. **Currently unavailable** — see below |
+| 3 · Scan-assist | **pymeshlab** | `scans/clean/<slug>.ply` | reverse-engineer an existing object; feeds stage 1/2 |
 | 4 · Slice | **OrcaSlicer CLI** | `projects/<slug>/<slug>.gcode` | K2 Plus profile |
 | 5 · Print | **Moonraker API** | physical part | **requires explicit human confirmation** |
 | 6 · Verify | calipers + `tasks/lessons.md` | measured deltas → model fixes | close the ralph loop |
@@ -99,15 +99,6 @@ regressed — do not edit the test to match.
 - `deploy/docker-compose.yml` — Open WebUI container (digest-pinned) · `deploy/webui/custom.css` — the GrifCAD skin
 - `config/printer.env` · `config/bridge.env` (both gitignored; copy from `.example`) — `K2_PLUS_HOST` · `CLAUDE_CODE_OAUTH_TOKEN` · `BRIDGE_TOKEN` (bridge `/v1` auth) · `BRIDGE_HOST`
 - `tasks/lessons.md` — corrections + measured-vs-modeled deltas (review at session start)
-
-## Known broken
-- **Stage 3 (scan-cleanup) does not run.** pymeshlab 2025.7.post1's macOS arm64 wheel
-  loads **zero** IO plugins: its `PlugIns/*.so` reference `@rpath/libmeshlab-common.dylib`
-  but carry no `LC_RPATH`, so nothing resolves and every `load_new_mesh()` raises
-  "Unknown format". It is a packaging bug, not our venv — arch is correct throughout and
-  `DYLD_LIBRARY_PATH` does not help. 2025.7.post1 is the newest release, so there is no
-  fixed version to move to; a downgrade would need a source build. CAD, slice and print
-  are unaffected. Details in `tasks/lessons.md`.
 
 ## Open items to verify on real hardware
 - Whether Moonraker upload/print-start works **without rooting** on this firmware build (root fallback: on-printer Settings → Root account information; creds `root` / `creality_2024`).

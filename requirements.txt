@@ -7,10 +7,10 @@
 #   uv pip compile requirements.txt -o uv.lock --python-version 3.12
 cadquery==2.8.0             # production CAD: parametric models, STL + STEP export
 pymeshlab==2025.7.post1     # 3D-scan mesh cleanup (Poisson reconstruction, decimation)
-                            # KNOWN BROKEN on macOS arm64 — see tasks/lessons.md and
-                            # scripts/clean_scan.py. The wheel ships plugins with no
-                            # LC_RPATH, so zero IO plugins load. Stage 3 is unavailable
-                            # until upstream fixes packaging; CAD/slice/print are fine.
+                            # If it ever reports "loaded plugins (0)" / "Unknown format
+                            # for load", the install is damaged, NOT the wheel:
+                            #   uv pip install --python .venv/bin/python \
+                            #     --force-reinstall --no-cache pymeshlab==2025.7.post1
 fastapi==0.141.1           # web bridge framework (OpenAI-compatible endpoint)
 uvicorn[standard]==0.52.4  # ASGI server for the bridge
 numpy==2.5.2               # pinned explicitly: native ABI shared by cadquery + pymeshlab
