@@ -72,3 +72,15 @@ voice server (:8004, your voice)                          Creality K2 Plus
 - New parts — `/studio` is your gallery; everything you design lives in `projects/`
 
 Break it. `git checkout .` un-breaks it. That's the whole game.
+
+## Contributing back
+Work on **`dev`**, not `main` — `main` is only ever fast-forwarded from a `dev` that
+has passed the gate. Before opening a PR:
+
+```bash
+.venv/bin/python -m pytest tests/     # headless; also what CI runs
+scripts/stack.sh check --deep         # the real gate: needs Colima, MPS, a Claude login
+```
+
+If you touch `bridge/app.py`'s `allowed_tools()`, expect the print-gate tests to push
+back. That is the point of them — see [SECURITY.md](../SECURITY.md).

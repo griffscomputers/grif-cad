@@ -2,6 +2,11 @@
 
 A Claude Code harness for a home **CAD → slice → print** pipeline, targeting a Creality K2 Plus. Describe a part, prototype it in OpenSCAD or build it in CadQuery, clean a 3D scan into a reference, slice with OrcaSlicer, and print over Moonraker — with a human confirmation gate before any physical print.
 
+## Branches
+- **`main`** — the stable branch. Clone or fork this one.
+- **`dev`** — where changes land first; promoted to `main` only after
+  `scripts/stack.sh check --deep` passes on real hardware. PRs should target `dev`.
+
 ## Quick start (fork & run)
 One command installs everything — Claude Code, OpenSCAD, OrcaSlicer, the open-source Docker
 runtime, the Python stack, and local config (macOS Apple Silicon):
@@ -31,9 +36,23 @@ Prefer to wire it up by hand (macOS)? `setup.sh` runs all of this for you, but t
 brew install --cask claude-code openscad@snapshot orcaslicer creality-print
 brew install colima docker docker-compose uv
 # python stack
-uv venv --python 3.12 .venv && uv pip install -r requirements.txt
+uv venv --python 3.12 .venv && uv pip install -r uv.lock   # lockfile = reproducible
 # local config
 cp config/printer.env.example config/printer.env   # set K2_PLUS_HOST
 cp config/bridge.env.example  config/bridge.env     # set CLAUDE_CODE_OAUTH_TOKEN, SLICER_DEFAULT
+openssl rand -hex 32                                # -> BRIDGE_TOKEN (auth for the bridge)
 ```
 Then export the K2 Plus presets from OrcaSlicer into `profiles/`.
+
+## Security
+This runs an AI agent with **filesystem write access and a shell allowlist on your
+machine**, and the bridge listens on your network. `setup.sh` generates a
+`BRIDGE_TOKEN` so `/v1/*` is authenticated by default — do not expose port 8765 to
+an untrusted network, and never add the printer path to the tool allowlist.
+Read **[SECURITY.md](SECURITY.md)** before running it anywhere shared.
+
+Physical printing is deliberately human-gated: the web UI can model, render and
+slice, but starting a print is always an explicit person's decision.
+
+## License
+[MIT](LICENSE).
