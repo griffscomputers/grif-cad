@@ -19,7 +19,12 @@ proj="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$proj"
 
 SERVER_REPO="https://github.com/devnen/Chatterbox-TTS-Server"
-SERVER_PIN="f0afcc6d01d4424ad72950038dff66646b24bc78"   # v2.0.0 line, reviewed
+SERVER_PIN="915ae289340e10c6047f27f47e22eae9bf350c32"   # advanced 2026-08-27, diff reviewed:
+                                                        # only server.py (+optional `language`
+                                                        # param, backward compatible) and utils.py
+                                                        # (chunking no longer misreads narrative
+                                                        # dashes as bullet lists). Rest is docs +
+                                                        # AMD/RDNA4 Docker, unused on macOS.
 CHATTERBOX_REPO="https://github.com/devnen/chatterbox-v2.git"
 CHATTERBOX_PIN="cc0357396d9c73fc1e6c544ee40bb596020edd09" # master resolved 2026-07-04
                                                           # (includes the MPS float64 fix)

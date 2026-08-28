@@ -69,7 +69,16 @@ ok "$HOME/.docker/config.json"
 # --- Python venv + deps ---
 say "Python 3.12 venv + CAD/bridge dependencies"
 [ -x ".venv/bin/python" ] || uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -r requirements.txt
+# Install from the lockfile so every clone gets identical transitive versions.
+# `install` rather than `sync`: every version in uv.lock is already exact, and sync
+# would additionally REMOVE anything not listed — nuking test deps from a dev's venv
+# on every re-run. Regenerate the lock after editing requirements.txt:
+#   uv pip compile requirements.txt -o uv.lock --python-version 3.12
+if [ -f uv.lock ]; then
+  uv pip install --python .venv/bin/python -r uv.lock
+else
+  uv pip install --python .venv/bin/python -r requirements.txt
+fi
 ok "venv ready ($(.venv/bin/python --version))"
 
 # --- local config from examples ---

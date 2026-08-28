@@ -14,7 +14,9 @@ services:
     # Pinned by digest for reproducibility. The skin (webui/custom.css) is only 34 lines
     # and its sole upstream selector is `.dark`, so it survives most bumps — but bump
     # deliberately and re-run `scripts/stack.sh check` anyway.
-    image: ghcr.io/open-webui/open-webui@sha256:7f1b0a1a50cfbac23da3b16f96bc968fd757b26dc9e54e93813d61768ea9184e
+    # v0.11.1 (release-tag index digest, linux/amd64+arm64). Resolve a new one with:
+    #   docker buildx imagetools inspect ghcr.io/open-webui/open-webui:vX.Y.Z
+    image: ghcr.io/open-webui/open-webui@sha256:6bb1fbe8ab0a3e0456067f493044ffb66a30a65a34be47f6a5862176a370dd16
     container_name: grifcad-openwebui
     ports:
       - "${WEBUI_PORT:-3000}:8080"

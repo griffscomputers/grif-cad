@@ -1,7 +1,16 @@
 # grif-cad Python dependencies — Python 3.12 venv (created by setup.sh via uv).
 # One shared venv serves both the CAD stack and the web bridge. Pinned to the
 # versions validated on macOS Apple Silicon.
+#
+# Exact transitive versions are locked in uv.lock — setup.sh installs from that, so
+# two people cloning this repo get the same stack. Regenerate after editing here:
+#   uv pip compile requirements.txt -o uv.lock --python-version 3.12
 cadquery==2.8.0             # production CAD: parametric models, STL + STEP export
 pymeshlab==2025.7.post1     # 3D-scan mesh cleanup (Poisson reconstruction, decimation)
-fastapi==0.138.0           # web bridge framework (OpenAI-compatible endpoint)
-uvicorn[standard]==0.49.0  # ASGI server for the bridge
+                            # KNOWN BROKEN on macOS arm64 — see tasks/lessons.md and
+                            # scripts/clean_scan.py. The wheel ships plugins with no
+                            # LC_RPATH, so zero IO plugins load. Stage 3 is unavailable
+                            # until upstream fixes packaging; CAD/slice/print are fine.
+fastapi==0.141.1           # web bridge framework (OpenAI-compatible endpoint)
+uvicorn[standard]==0.52.4  # ASGI server for the bridge
+numpy==2.5.2               # pinned explicitly: native ABI shared by cadquery + pymeshlab
