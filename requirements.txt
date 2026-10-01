@@ -13,4 +13,4 @@ pymeshlab==2025.7.post1     # 3D-scan mesh cleanup (Poisson reconstruction, deci
                             #     --force-reinstall --no-cache pymeshlab==2025.7.post1
 fastapi==0.141.1           # web bridge framework (OpenAI-compatible endpoint)
 uvicorn[standard]==0.52.4  # ASGI server for the bridge
-numpy==2.5.2               # pinned explicitly: native ABI shared by cadquery + pymeshlab
+numpy==2.5.3               # pinned explicitly: native ABI shared by cadquery + pymeshlab
