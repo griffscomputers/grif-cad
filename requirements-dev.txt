@@ -2,4 +2,4 @@
 # requirements.txt is what a fork needs to actually use the assistant.
 #   uv pip install --python .venv/bin/python -r requirements-dev.txt
 pytest==9.1.1
-httpx2==2.12.0    # starlette's TestClient backend (plain httpx is deprecated there)
+httpx2==2.13.1    # starlette's TestClient backend (plain httpx is deprecated there)
