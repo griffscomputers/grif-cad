@@ -18,7 +18,7 @@ jobs:
     name: Bridge tests (safety gate)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -37,7 +37,7 @@ jobs:
     name: Shell lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
@@ -48,7 +48,7 @@ jobs:
     name: Compose config validates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: docker compose config
         run: docker compose --env-file config/voice.env -f deploy/docker-compose.yml config >/dev/null
 
@@ -56,7 +56,7 @@ jobs:
     name: Runtime deps resolve
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - name: Resolve requirements.txt on 3.12
         run: uv pip compile requirements.txt --python-version 3.12 --quiet --output-file /dev/null
