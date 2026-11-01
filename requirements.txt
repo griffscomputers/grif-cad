@@ -11,6 +11,6 @@ pymeshlab==2025.7.post1     # 3D-scan mesh cleanup (Poisson reconstruction, deci
                             # for load", the install is damaged, NOT the wheel:
                             #   uv pip install --python .venv/bin/python \
                             #     --force-reinstall --no-cache pymeshlab==2025.7.post1
-fastapi==0.141.1           # web bridge framework (OpenAI-compatible endpoint)
+fastapi==0.162.0           # web bridge framework (OpenAI-compatible endpoint)
 uvicorn[standard]==0.52.4  # ASGI server for the bridge
 numpy==2.5.2               # pinned explicitly: native ABI shared by cadquery + pymeshlab
