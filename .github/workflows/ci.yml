@@ -61,4 +61,6 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0 (no floating major tags since v8)
       - name: Resolve requirements.txt on 3.12
-        run: uv pip compile requirements.txt --python-version 3.12 --quiet --output-file /dev/null
+        # Discard via stdout, NOT `--output-file /dev/null`: uv writes a temp file
+        # beside the target and renames it, so /dev/null means a write into /dev/.
+        run: uv pip compile requirements.txt --python-version 3.12 --quiet >/dev/null
