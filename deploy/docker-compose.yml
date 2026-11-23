@@ -14,9 +14,11 @@ services:
     # Pinned by digest for reproducibility. The skin (webui/custom.css) is only 34 lines
     # and its sole upstream selector is `.dark`, so it survives most bumps — but bump
     # deliberately and re-run `scripts/stack.sh check` anyway.
-    # v0.11.1 (release-tag index digest, linux/amd64+arm64). Resolve a new one with:
+    # Release-tag index digest (linux/amd64+arm64). Written `tag@digest`: Docker pulls by
+    # the digest alone; the tag is what lets Dependabot see the version and propose bumps.
+    # Keep the two in sync. Resolve a new digest with:
     #   docker buildx imagetools inspect ghcr.io/open-webui/open-webui:vX.Y.Z
-    image: ghcr.io/open-webui/open-webui@sha256:6bb1fbe8ab0a3e0456067f493044ffb66a30a65a34be47f6a5862176a370dd16
+    image: ghcr.io/open-webui/open-webui:v0.11.1@sha256:6bb1fbe8ab0a3e0456067f493044ffb66a30a65a34be47f6a5862176a370dd16
     container_name: grifcad-openwebui
     ports:
       - "${WEBUI_PORT:-3000}:8080"

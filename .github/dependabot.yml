@@ -8,7 +8,11 @@ updates:
     target-branch: dev
     open-pull-requests-limit: 5
 
-  - package-ecosystem: docker
+  # `docker-compose`, NOT `docker`: the `docker` ecosystem only reads Dockerfiles /
+  # Kubernetes YAML and failed every run with "No Dockerfiles nor Kubernetes YAML
+  # found in /deploy". The compose image must also be `tag@digest` (a bare digest
+  # gives Dependabot no version to compare).
+  - package-ecosystem: docker-compose
     directory: /deploy
     schedule: { interval: monthly }
     target-branch: dev
